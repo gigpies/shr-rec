@@ -9,10 +9,14 @@ controls and clean Exit. Recording, playback, meters and MIDI are not connected.
 
 ```sh
 cargo build --locked --release
-./target/release/shr-rec --help
-./target/release/shr-rec --data-root ./user --init-config
-./target/release/shr-rec --data-root ./user
+mkdir -p "$HOME/.local/bin"
+ln -s "$PWD/target/release/shr-rec" "$HOME/.local/bin/shr-rec"
+shr-rec --help
+shr-rec
 ```
+
+The one-time link assumes `~/.local/bin` is on PATH and follows subsequent
+release builds in this checkout. It refuses to replace an existing command.
 
 Rust is pinned to **1.97.1**. No JACK server, audio client, MIDI connection,
 service or launcher is started by this version. Existing terminal font and

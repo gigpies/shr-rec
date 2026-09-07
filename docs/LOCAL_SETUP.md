@@ -6,7 +6,22 @@ Build with `cargo build --locked --release`. The exact toolchain is selected by
 if absent. The tested platform is AArch64 Linux. The first foundation needs no
 JACK/ALSA development packages because no audio adapter is included yet.
 
-Run `target/release/shr-rec` in a terminal. The UI uses the upper-left 40×13 cells:
+From the checkout, install a user-local command once:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+ln -s "$PWD/target/release/shr-rec" "$HOME/.local/bin/shr-rec"
+shr-rec --version
+shr-rec
+```
+
+`~/.local/bin` must be on PATH (it already is on the development machine).
+The link follows subsequent release builds and refuses to overwrite an existing
+command. Keep the checkout at this path, or recreate the link after moving it.
+This installs no service and does not start audio. To remove the command,
+remove only the `~/.local/bin/shr-rec` symlink.
+
+Run `shr-rec` in a terminal. The UI uses the upper-left 40×13 cells:
 body rows 1–10, contextual controls 11–12, shared status row 13. Smaller
 terminals show a size notice and a touch Exit target on the last row.
 
