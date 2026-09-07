@@ -1,0 +1,6 @@
+/target/
+/user/
+*.take/
+*.take.part/
+*.wav
+*.wav.part
