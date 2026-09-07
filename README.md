@@ -1,4 +1,4 @@
-# rec
+# shr-rec
 
 A standalone multichannel recorder/player for a Raspberry Pi and a **40×13**
 touch terminal. Runs directly or as gadget `rec` from a launcher.
@@ -9,9 +9,9 @@ controls and clean Exit. Recording, playback, meters and MIDI are not connected.
 
 ```sh
 cargo build --locked --release
-./target/release/rec --help
-./target/release/rec --data-root ./user --init-config
-./target/release/rec --data-root ./user
+./target/release/shr-rec --help
+./target/release/shr-rec --data-root ./user --init-config
+./target/release/shr-rec --data-root ./user
 ```
 
 Rust is pinned to **1.97.1**. No JACK server, audio client, MIDI connection,

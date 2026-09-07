@@ -1,6 +1,6 @@
 use crossterm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{Terminal, backend::TestBackend, layout::Rect};
-use rec::{
+use shr_rec::{
     config::{Config, Resolution},
     session::{Effect, RetainedTake, Session, Transport},
     ui::{Action, App},

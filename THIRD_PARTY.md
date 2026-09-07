@@ -14,7 +14,7 @@ Design references were inspected read-only in `../shsynth`, at observed revision
 
 SHR-DAW is MIT licensed, copyright (c) 2026 SHR-DAW contributors. Any subsequent
 copied/adapted source must retain its copyright and license notice here or in a
-source-specific notice. Reference hardware results do not establish rec results.
+source-specific notice. Reference hardware results do not establish shr-rec results.
 
 Ratatui 0.20 and Crossterm 0.26 follow the inspected project's dependency baseline;
 this is a deliberate reuse of known APIs, not a claim that they are newest.

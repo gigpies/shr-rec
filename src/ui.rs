@@ -184,7 +184,7 @@ impl App {
     pub fn draw<B: Backend>(&self, frame: &mut Frame<B>) {
         let size = frame.size();
         if size.width < 40 || size.height < 13 {
-            frame.render_widget(Paragraph::new("rec needs 40x13"), size);
+            frame.render_widget(Paragraph::new("shr-rec needs 40x13"), size);
             if size.height > 0 {
                 frame.render_widget(
                     Paragraph::new("EXIT"),
@@ -197,7 +197,7 @@ impl App {
         line(
             frame,
             0,
-            &format!("rec  {build}   INPUT SETUP"),
+            &format!("shr-rec  {build}   INPUT SETUP"),
             Style::default(),
         );
         line(

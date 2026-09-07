@@ -4,7 +4,7 @@ Updated 2026-09-07. Stage 1 of [the plan](PLAN.md) is implemented.
 
 ## Delivered
 
-- Standalone `rec` executable, exact Rust 1.97.1 pin and locked dependencies.
+- Standalone `shr-rec` executable, exact Rust 1.97.1 pin and locked dependencies.
 - `--help`, `--version`, configurable private root and explicit create-only
   config initialization; ordinary launch does not write configuration.
 - Default 18 disarmed/unassigned input slots, validated stable IDs and bounded
@@ -35,8 +35,8 @@ launches isolated shell processes and checks keyboard Exit, touch Exit and
 SIGTERM/SIGINT/SIGHUP restoration of terminal flags, cursor, alternate screen
 and mouse reporting. No personal configuration is read by those fixtures.
 
-Release artifact: `target/release/rec` (not tracked). Run the PTY check against
-that artifact with `python3 tests/terminal.py target/release/rec`; this also
+Release artifact: `target/release/shr-rec` (not tracked). Run the PTY check against
+that artifact with `python3 tests/terminal.py target/release/shr-rec`; this also
 passed, as did the release `--version` smoke check.
 
 No historical/exhaustive tests or long soaks exist yet. Live JACK, MIDI,
@@ -53,3 +53,7 @@ shell. Playback, source/output editing, persistence of UI edits, meters and
 ALSA controller input remain unimplemented. No SHR take compatibility is
 claimed yet. Read [architecture](ARCHITECTURE.md) before integrating worker
 completion or signal-driven finalization.
+
+The package, executable, help/version output and UI title now use `shr-rec` to
+avoid the existing SoX `rec` command. Launcher ID `rec` is unchanged. All 13
+normal tests, Clippy and the release build passed again after the rename.

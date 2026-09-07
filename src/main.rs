@@ -6,7 +6,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use rec::{config::Config, session::Transport, ui::App};
+use shr_rec::{config::Config, session::Transport, ui::App};
 use std::{
     env,
     ffi::OsString,
@@ -15,13 +15,13 @@ use std::{
     time::Duration,
 };
 
-const HELP: &str = "rec — standalone multichannel recorder/player (foundation)\n\nUsage: rec [--data-root PATH] [--init-config]\n       rec --help | --version\n\n--data-root PATH  Private configuration and future takes\n--init-config     Create default config.json without replacing existing files\n\nRoot: --data-root, then REC_DATA_ROOT, then XDG_DATA_HOME/rec,\n      then HOME/.local/share/rec.\nTouch: PREV/NEXT, ARM, STOP, EXIT. Keyboard: arrows, Space, s, q/Esc.\nAudio recording/playback and MIDI are not implemented in this foundation.\n";
+const HELP: &str = "shr-rec — standalone multichannel recorder/player (foundation)\n\nUsage: shr-rec [--data-root PATH] [--init-config]\n       shr-rec --help | --version\n\n--data-root PATH  Private configuration and future takes\n--init-config     Create default config.json without replacing existing files\n\nRoot: --data-root, then REC_DATA_ROOT, then XDG_DATA_HOME/rec,\n      then HOME/.local/share/rec.\nTouch: PREV/NEXT, ARM, STOP, EXIT. Keyboard: arrows, Space, s, q/Esc.\nAudio recording/playback and MIDI are not implemented in this foundation.\n";
 
 fn main() -> std::process::ExitCode {
     match run() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("rec: {error:#}");
+            eprintln!("shr-rec: {error:#}");
             std::process::ExitCode::FAILURE
         }
     }
@@ -38,7 +38,7 @@ fn run() -> Result<()> {
                 return Ok(());
             }
             Some("--version" | "-V") => {
-                println!("rec {}", env!("CARGO_PKG_VERSION"));
+                println!("shr-rec {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
             Some("--data-root") => {

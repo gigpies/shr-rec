@@ -167,19 +167,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rec"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "crossterm",
- "libc",
- "ratatui",
- "serde",
- "serde_json",
- "signal-hook",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -235,6 +222,19 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "shr-rec"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "libc",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "signal-hook",
 ]
 
 [[package]]

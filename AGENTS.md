@@ -1,4 +1,4 @@
-# rec — standalone multichannel recorder/player
+# shr-rec — standalone multichannel recorder/player
 
 ## Product and scope
 

@@ -1,4 +1,4 @@
-use rec::config::Config;
+use shr_rec::config::Config;
 use std::{
     fs,
     os::unix::fs::{PermissionsExt, symlink},
@@ -25,7 +25,7 @@ impl Drop for Scratch {
     }
 }
 fn run(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_rec"))
+    Command::new(env!("CARGO_BIN_EXE_shr-rec"))
         .args(args)
         .env_remove("REC_DATA_ROOT")
         .env_remove("XDG_DATA_HOME")
@@ -40,7 +40,7 @@ fn help_and_version_work_without_home_or_terminal() {
     assert!(String::from_utf8_lossy(&output.stdout).contains("--data-root"));
     let output = run(&["--version"]);
     assert!(output.status.success());
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "rec 0.1.0\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "shr-rec 0.1.0\n");
     assert!(!run(&["--data-root"]).status.success());
     assert!(!run(&["--unknown"]).status.success());
 }
@@ -107,7 +107,7 @@ fn pseudo_terminal_exit_touch_signal_and_raw_mode_restoration() {
     // This exercises the production binary with an isolated PTY, never audio.
     let output = Command::new("python3")
         .arg("tests/terminal.py")
-        .arg(env!("CARGO_BIN_EXE_rec"))
+        .arg(env!("CARGO_BIN_EXE_shr-rec"))
         .output()
         .unwrap();
     assert!(

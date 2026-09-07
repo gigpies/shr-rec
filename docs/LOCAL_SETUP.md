@@ -6,7 +6,7 @@ Build with `cargo build --locked --release`. The exact toolchain is selected by
 if absent. The tested platform is AArch64 Linux. The first foundation needs no
 JACK/ALSA development packages because no audio adapter is included yet.
 
-Run `target/release/rec` in a terminal. The UI uses the upper-left 40×13 cells:
+Run `target/release/shr-rec` in a terminal. The UI uses the upper-left 40×13 cells:
 body rows 1–10, contextual controls 11–12, shared status row 13. Smaller
 terminals show a size notice and a touch Exit target on the last row.
 
@@ -19,7 +19,7 @@ Root selection, in order:
 3. `$XDG_DATA_HOME/rec` (XDG_DATA_HOME must be absolute)
 4. `$HOME/.local/share/rec`
 
-`rec --data-root ./user --init-config` creates 18 disarmed, unassigned inputs
+`shr-rec --data-root ./user --init-config` creates 18 disarmed, unassigned inputs
 in `config.json`, using file mode 0600 and new-directory mode 0700 (subject to
 umask). It refuses to replace an existing file. Existing parent directory
 permissions are left intact. Ordinary startup reads only; a missing file uses
@@ -41,8 +41,8 @@ while stopped to set startup preferences. Do not track real routes or takes.
 
 ## Direct and launcher invocation
 
-The stable gadget ID and executable are `rec`. The caller launches an ordinary
-process, for example `rec --data-root /private/path`, and waits for its exit.
+The stable gadget ID is `rec`; the executable is `shr-rec`. The caller launches an ordinary
+process, for example `shr-rec --data-root /private/path`, and waits for its exit.
 There is no launcher SDK, daemon, socket, shared crate or network dependency.
 `--help` and `--version` work without HOME, audio or an interactive terminal.
 Errors exit nonzero and print to stderr after terminal cleanup.
@@ -58,3 +58,13 @@ damaged result visible before another deliberate Exit. No engine is wired to
 that protocol yet. Before recording is enabled, the signal path must drive its
 quiescence/finalization effects and leave crash-recoverable files; current
 terminal tests establish only shell cleanup.
+
+## Executable naming
+
+The project and command are `shr-rec`. Do not install a `rec` alias: SoX already
+provides that recording command on other users' systems (see the
+[SoX manual](https://manpages.debian.org/stretch/sox/rec.1.en.html)). A launcher catalog
+uses ID `rec`, display name `SHR Rec`, and an explicit path to `shr-rec`; the ID
+must never be used as an implicit executable fallback. The existing
+`REC_DATA_ROOT` variable and `rec` data-directory suffix remain unchanged.
+The source checkout directory name does not affect the executable name.
