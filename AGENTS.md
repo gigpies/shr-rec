@@ -77,15 +77,15 @@ synchronized playback already exists. Build and validate playback explicitly.
 Read these focused sources before extracting code; current source and tests
 win over historical documents:
 
-- `../shsynth/docs/MULTITRACK_RECORDING.md`
-- `../shsynth/src/audio_recorder.rs` and `../shsynth/src/recording.rs`
+- `../shr-daw/docs/MULTITRACK_RECORDING.md`
+- `../shr-daw/src/audio_recorder.rs` and `../shr-daw/src/recording.rs`
   (distinguish raw stems from the separate final stereo recorder)
-- `../shsynth/src/loop_player.rs`, `../shsynth/src/jack.rs`
-- `../shsynth/docs/MULTITRACK_PRESENTATION.md`,
-  `../shsynth/docs/MR18_TEST_PLAN.md`
-- `../shsynth/docs/CODE_REVIEW_2026-09-05.md` and its implementation record,
+- `../shr-daw/src/loop_player.rs`, `../shr-daw/src/jack.rs`
+- `../shr-daw/docs/MULTITRACK_PRESENTATION.md`,
+  `../shr-daw/docs/MR18_TEST_PLAN.md`
+- `../shr-daw/docs/CODE_REVIEW_2026-09-05.md` and its implementation record,
   especially recorder recovery, writer startup, and callback ownership
-- `../shsynth/docs/CONTROLLER_INTERFACE.md` and controller profile/learn code
+- `../shr-daw/docs/CONTROLLER_INTERFACE.md` and controller profile/learn code
 
 ## Build order and acceptance
 

@@ -3,7 +3,7 @@
 The initial shell, configuration and transport code are newly written here.
 No source code, private configuration or assets were copied from SHR-DAW.
 
-Design references were inspected read-only in `../shsynth`, at observed revision
+Design references live in `../shr-daw` and were inspected read-only at revision
 `0e9ed0fc3873a22d6253b5b7cc4885daeff0cfae`:
 
 - `docs/MULTITRACK_RECORDING.md`, `MULTITRACK_PRESENTATION.md`,
