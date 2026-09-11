@@ -40,7 +40,7 @@ fn help_and_version_work_without_home_or_terminal() {
     assert!(String::from_utf8_lossy(&output.stdout).contains("--data-root"));
     let output = run(&["--version"]);
     assert!(output.status.success());
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "shr-rec 0.1.0\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "shr-rec 0.1.1\n");
     assert!(!run(&["--data-root"]).status.success());
     assert!(!run(&["--unknown"]).status.success());
 }
