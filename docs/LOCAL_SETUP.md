@@ -83,3 +83,9 @@ uses ID `rec`, display name `SHR Rec`, and an explicit path to `shr-rec`; the ID
 must never be used as an implicit executable fallback. The existing
 `REC_DATA_ROOT` variable and `rec` data-directory suffix remain unchanged.
 The source checkout directory name does not affect the executable name.
+
+## Checkout name
+
+The repository and checkout directory are `shr-rec`. The executable is
+`shr-rec`; the launcher gadget ID remains `rec`. If moving an older checkout,
+update its `~/.local/bin/shr-rec` link to the new checkout’s release binary.
