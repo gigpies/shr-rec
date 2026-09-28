@@ -1,11 +1,18 @@
-# shr-rec
+![SHR Rec — six aligned tracks, foundation stage](docs/assets/banner.svg)
 
-A standalone multichannel recorder/player for a Raspberry Pi and a **40×13**
-touch terminal. Runs directly or as gadget `rec` from a launcher.
+# SHR Rec
+
+A standalone recorder/player project for Raspberry Pi and a **40×13** touch
+terminal. Built around one take with aligned channel stems and a shared playback
+timeline. Runs directly or as gadget `rec` from a launcher.
+
+[Setup](docs/LOCAL_SETUP.md) · [Roadmap](docs/PLAN.md) · [Current behavior](docs/STATUS.md)
 
 **Current status: foundation, not yet an audio recorder/player.** The executable
 provides input slots, session-only arming, private configuration, touch/keyboard
 controls and clean Exit. Recording, playback, meters and MIDI are not connected.
+
+## Try the current shell
 
 ```sh
 cargo build --locked --release
@@ -25,6 +32,8 @@ console settings remain unchanged after exit.
 Touch PREV/NEXT to select, ARM to toggle and EXIT to return to the caller.
 Keyboard equivalents: arrows, Space, `s` for Stop, `q` or Escape for Exit.
 RECORD and PLAY currently explain that the engine is not implemented.
+
+## Documentation
 
 - [Implementation plan](docs/PLAN.md)
 - [Current behavior and validation](docs/STATUS.md)
