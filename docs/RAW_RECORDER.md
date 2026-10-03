@@ -129,6 +129,7 @@ software output integrity; they are not a recording of the analog output.
 | --- | --- |
 | Final v7 600-second NVMe take | 28,800,000 frames per stem; all eight PCM24 hashes and direct ADC-byte hashes exact; dry/DAC replay and full journal exact; no clipping, recording faults or xruns |
 | Final v7 packet-fault and restart trials, 15 seconds each | Exact raw/dry continuity, zero xruns and both wet channels recovered |
+| Unmodified v7 generated-only electrical trial, 12 seconds | 576,000 frames per stem; all eight PCM24 and direct ADC hashes, dry/DAC replay and journal exact; no xruns or wet-return errors; channel 1 physical return verified |
 | Earlier 600-second take, 192-frame period / 768-frame buffer | 28,800,000 frames per stem; all eight PCM24 payload hashes matched the host; full source journal contiguous; exact PA dry replay; zero xruns, gaps, drops, clips or finalization errors |
 | Earlier two 15-second transport fault/restart trials | 720,000 frames each; exact dry and recorded samples; zero xruns |
 | Forced 100 ms local driver stall | 96,000 retained frames; incomplete take with host fault 2 |
@@ -157,9 +158,20 @@ Mixed physical/software channel identity stays in the host's source-to-stem map.
 
 GigPies `docs/AUDIO_HARDWARE.md` owns the complete measurements, failures and
 private evidence locations. This checkpoint establishes the embedded library's
-observed recording behavior in that two-input configuration. Both physical
-output-to-input connections are now present; a separate generated-signal test
-is being prepared without an ADC feedback path, and physical acceptance remains
-unmeasured at this checkpoint. Standalone UI recording/playback, native eight-
-or eighteen-input capture, analog loopback, acoustic latency and full-show
-reliability remain separate acceptance gates.
+observed recording behavior in that two-input configuration. Later generated-only
+electrical probes verified output 1 to input 1 with no ADC monitoring/feedback
+path. Two eight-second PN probes at -72 and -54 dBFS used the accepted 384/3072
+period/buffer settings without errors. The working left path had correlation
+0.799 at a 2739-frame (57.0625 ms) lag. That interval includes 2688 frames of
+playback prefill, the startup call, USB transport and converters; it does not
+isolate converter delay or establish capture-to-speaker latency.
+
+The unmodified v7 host then ran for 12 seconds with real PA, FX and recording.
+The left 997 Hz return measured -0.674 dB gain; the right 1499 Hz return measured
+-69.440 dB, 68.77 dB below the left result. The right physical path remains
+unusable and unresolved. The user suspects its cable and directed subsequent
+work to the verified channel. The complete 576,000-frame software/recording
+checks passed as listed above; channel 2's electrical result is not accepted.
+Standalone UI recording/playback, native eight- or eighteen-input capture,
+both-channel physical acceptance, acoustic latency and full-show reliability
+remain separate gates.

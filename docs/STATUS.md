@@ -68,9 +68,16 @@ The [raw-library hardware checkpoint](RAW_RECORDER.md#embedded-hardware-checkpoi
 records the interpretation limits. GigPies `docs/AUDIO_HARDWARE.md` owns the
 complete metrics and private evidence paths. These results do not enable the
 standalone UI or playback, establish native eight-channel capture, or establish
-physical end-to-end/acoustic latency. Both physical output-to-input connections
-are now present, but that separate physical acceptance has not yet been measured
-at this documentation checkpoint.
+physical capture-to-speaker or acoustic latency. Subsequent generated-only
+electrical loopback verified output 1 to input 1. A 12-second unmodified v7 run
+with real PA, FX and recording retained 576,000 frames per stem; all eight PCM24
+and direct ADC hashes, dry/DAC replay and the journal were exact, with no xruns
+or wet-return errors. The left 997 Hz return measured -0.674 dB gain. The right
+1499 Hz return was 68.77 dB lower and remains unresolved; the user suspects its
+cable and selected the working channel. A separate PN probe's 2739-frame /
+57.0625 ms lag includes startup and 2688 frames of playback prefill, so it is
+not an isolated converter or capture-to-speaker latency measurement. No ADC
+monitoring/feedback path was enabled.
 
 ## Foundation delivery (September 7)
 
