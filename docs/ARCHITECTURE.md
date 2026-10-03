@@ -36,7 +36,24 @@ effects and live status to engine ownership is required before enabling audio.
 restoration. It owns no worker, audio client or MIDI port in this milestone.
 Signal handlers set a flag; the event loop returns through terminal cleanup.
 
-## Required next boundaries
+## Independent raw recording boundary
+
+`recorder` now implements a separate host-fed raw worker and versioned C ABI;
+see [its complete lifecycle and format contract](RAW_RECORDER.md). It owns no
+device. One producer supplies interleaved f64 periods through two preallocated
+rtrb queues, committing samples before their source-frame descriptor. The worker
+writes aligned PCM24 mono stems and a source timeline journal. Setup waits for
+writer readiness; shutdown requires producer quiescence, drain and join.
+An immutable incomplete manifest precedes capture; errors never count as a
+successful take. Recovery validates every source stem, holds directory-relative
+descriptors and copies common frames to a new destination, preserving originals.
+
+The raw library is independent of the existing shell session controller.
+It neither enables Record in the UI nor claims the future full standalone take
+schema, source-route persistence or playback. GigPies loads the cdylib through
+versioned symbols; there are no sibling path dependencies.
+
+## Remaining standalone boundaries
 
 Capture: prepare routes, files, buffers and callback storage off-thread. One
 callback exclusively owns mutable capture state and pushes whole interleaved
@@ -48,7 +65,8 @@ Persistence: native versioned manifest with actual/preferred identity, stereo
 groups, common frames and integrity counters. Temporary takes and no-replace
 publication; validate every stem before any recovery mutation. Descriptor-based
 path handling must protect against symlink escapes and partial rename retries.
-No recovery command or take format is implemented in this foundation.
+The raw host format/recovery above is implemented; a CLI recovery command and the
+full standalone take format remain unimplemented.
 
 Playback: bounded interleaved prefetch from validated mono stems; one common
 callback cursor with coordinated pause, seek/reprime, EOF and underrun. No

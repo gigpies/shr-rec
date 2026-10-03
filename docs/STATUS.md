@@ -1,6 +1,38 @@
 # Development status
 
-Updated 2026-09-07. Stage 1 of [the plan](PLAN.md) is implemented.
+Updated 2026-10-03. Stage 1 and the independent raw-library part of stage 2 in
+[the plan](PLAN.md) are implemented.
+
+## Independent raw recorder
+
+The [raw recorder library](RAW_RECORDER.md) now writes aligned mono PCM24 WAVs
+from host-provided f64 interleaved periods. It supplies versioned C ABI symbols
+through `libshr_rec.so`, bounded preallocated rtrb queues, writer readiness,
+source epoch/frame journaling, create-new storage, fault counters, draining
+finalization and recovery that copies common frames while preserving originals.
+Source valid bits are declared separately from PCM24 container width. It creates
+no audio device/client, route, service or monitoring path. The shell's Record
+and Play controls remain unavailable.
+
+Exact rustc 1.97.1 passes formatting, all-target tests, warning-denied Clippy and
+the release build with `CARGO_INCREMENTAL=0`. **23 normal tests pass**: the prior
+13 foundation checks plus ten raw engine/recovery/callback checks. New coverage
+includes exact PCM24 extremes and channel order, odd RIFF padding, forward gaps,
+backwards/nonfinite/invalid input, whole-period overflow, startup/empty/drop/
+clipping faults, `/dev/full` write failure, no-replace publication collision,
+partial-publication recovery, repeated recovery, malformed/symlink/live-writer
+refusal and callback allocation/deallocation checks. A separate child process
+is killed after writing a real period; copy recovery retains its 192 common
+frames and leaves the original payload exact. This is process-crash evidence,
+not filesystem power-loss acceptance.
+
+Hardware, network, long soaks, playback, acoustic and 18-channel performance
+checks were intentionally excluded from this module's software pass. No
+historical/exhaustive tests exist here. GigPies owns separate real-device host
+acceptance and source-to-stem mapping. No physical bit depth or device continuity
+is inferred from these synthetic fixtures.
+
+## Foundation delivery (September 7)
 
 ## Delivered
 
@@ -44,15 +76,15 @@ recording/playback, storage-load, physical touch/controller and borrowed-device
 checks were intentionally not run. Synthetic session events do not establish
 capture, file recovery, synchronization, latency or 18-channel performance.
 
-## Next implementation
+## Remaining standalone implementation
 
-Stage 2: native take schema, bounded raw capture/writer and restartable recovery
-with distinguishable synthetic-channel fixtures. Add stereo identity and
-integrity counters with the take format, then connect the tested engine to the
-shell. Playback, source/output editing, persistence of UI edits, meters and
-ALSA controller input remain unimplemented. No SHR take compatibility is
-claimed yet. Read [architecture](ARCHITECTURE.md) before integrating worker
-completion or signal-driven finalization.
+Complete stage 2's full native take schema and stereo/source identities, then
+connect the tested worker to the shell and exact device routes. The raw host
+format is deliberately separate from that future standalone format. Playback,
+source/output editing, persistence of UI edits, meters and ALSA controller input
+remain unimplemented. No SHR take compatibility is claimed yet. Read
+[architecture](ARCHITECTURE.md) before integrating worker completion or
+signal-driven finalization.
 
 The package, executable, help/version output and UI title now use `shr-rec` to
 avoid the existing SoX `rec` command. Launcher ID `rec` is unchanged. All 13

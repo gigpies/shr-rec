@@ -7,7 +7,11 @@ usable, tested increment; audio acceptance is separate from software evidence.
    root and configuration, exact route resolution, exclusive transport state
    and asynchronous shutdown contract, 40×13 touch/keyboard shell, CLI and
    terminal restoration. No live audio is enabled in this stage.
-2. **Recording and recovery:** adapt only raw capture pieces from SHR, with
+2. **Recording and recovery (raw host library implemented):** the independent
+   [raw library](RAW_RECORDER.md) provides bounded queues, PCM24 stems, readiness,
+   source-frame journaling, integrity and evidence-preserving copy recovery.
+   Standalone routes/stereo identities, full take schema and shell/device wiring
+   remain. Adapt only raw capture pieces from SHR, with
    provenance; bounded interleaved SPSC, startup handshake, one worker, mono
    24-bit WAVs, native versioned manifest, no-replace publication, descriptor
    based safe recovery. Test distinguishable channels, partial rename retries,

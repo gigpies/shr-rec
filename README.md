@@ -8,9 +8,12 @@ timeline. Runs directly or as gadget `rec` from a launcher.
 
 [Setup](docs/LOCAL_SETUP.md) · [Roadmap](docs/PLAN.md) · [Current behavior](docs/STATUS.md)
 
-**Current status: foundation, not yet an audio recorder/player.** The executable
+**Current status: shell plus an independent raw recording library.** The executable
 provides input slots, session-only arming, private configuration, touch/keyboard
-controls and clean Exit. Recording, playback, meters and MIDI are not connected.
+controls and clean Exit. The [raw recorder](docs/RAW_RECORDER.md) accepts host-supplied
+samples through Rust or a versioned C ABI and writes aligned PCM24 stems with
+explicit integrity and recovery. Shell recording, playback, meters and MIDI are
+not connected.
 
 ## Try the current shell
 
@@ -40,6 +43,7 @@ RECORD and PLAY currently explain that the engine is not implemented.
 - [Configuration and launcher boundary](docs/LOCAL_SETUP.md)
 - [Architecture and remaining engine contracts](docs/ARCHITECTURE.md)
 - [Reference provenance](THIRD_PARTY.md)
+- [Raw recorder library and C ABI](docs/RAW_RECORDER.md)
 
 Run normal software checks with `cargo test --locked --all-targets`; Python 3
 and `mkfifo` are needed for isolated CLI/terminal regressions. Tests never open
