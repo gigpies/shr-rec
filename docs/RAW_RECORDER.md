@@ -116,14 +116,96 @@ and actual-device evidence; no standalone shell audio acceptance is claimed.
 
 ## Embedded hardware checkpoint
 
+### H8 recording complete; physical continuity needs review
+
+Recorder engine source `c390305` and release library
+`6d3b0cfcb8134ffb6d0851fc9a3259b02cd57c36ac1ac4752e6109ff5b3e718a` remain
+unchanged. The actual host and private offline ABI checks exercise 48-frame
+blocks; the offline check also covers 96-frame blocks, all eight exact PCM24
+payloads and the complete source journal. These checks establish the supplied
+sample contract, not callback wall-time bounds.
+
+GigPies runtime v13 (`1539915`) completed H8 with AudioBox 48 kHz stereo S32
+capture, 48-frame periods, 192-frame device capacity, zero silent prefill and
+288-frame (6 ms) wet admission. Its owned audio thread used FIFO priority 20 on
+CPU 3 with process memory locking. The temporary trial guard set
+`compact_unevictable_allowed=0`; the original value 1, memory-lock state and
+scheduling were restored after each run. Task resources were released afterward.
+
+| H8 check | Recorded result |
+| --- | --- |
+| 600-second soak | Complete, 28,800,000 frames per stem; all eight PCM24 hashes, native ADC payload hashes, dry/prepared-DAC replay and full journal exact |
+| Soak integrity/network | Zero recording drops, gaps, errors, USB xruns, queue errors or missing/expired wet returns; all 600,000 return packets received |
+| Render measurements | Maximum 289.665 microseconds; zero recorded render faults, context switches or measurement errors |
+| Packet faults, 16 seconds | 768,000 exact retained frames; raw/dry continuity, zero xruns and verified wet recovery |
+| Brain restart, 16 seconds | 768,000 exact retained frames; raw/dry continuity, zero xruns and verified wet recovery |
+| Forced xrun | 96,000 exact retained frames finalized incomplete with host fault 2 |
+| New session after fault | 30 seconds / 1,440,000 exact frames |
+
+The eight stems still represent **two physical ADC channels and six software
+taps**. Only physical channel 1 was exercised as the working electrical return;
+right software source/output remained zero. The final soak's physical analyzer
+reported 11,975 trusted windows out of 11,977, with offsets of 249–251 frames
+(5.1875–5.229167 ms). Two 100 ms windows were weak. Refinement with 10 ms windows
+found a one-frame increase near 513.71 seconds (correlation 0.580) and another
+near 520.30 seconds (0.782). These are approximate window locations, not exact
+converter discontinuity sample indices.
+
+No persistent change reached the 24-frame threshold. Nevertheless, the cause,
+exact converter sample continuity and clock lock remain unresolved, so the
+physical analyzer's `requires_review` remains true. Exact stored PCM does not
+prove physical sample continuity. Reference coverage excludes the first second
+of quiet and the final 100 ms. The measured electrical offset includes the host,
+USB and converter path; it is not acoustic or capture-to-speaker latency.
+
+#### Retained comparisons and failures
+
+H7's 600-second take had 28,800,000 exact retained frames per stem and all 11,977
+physical windows at 249 frames. It still failed 4 ms wet admission: two missing
+and two expired returns, despite all 600,000 packets arriving, with RTT reaching
+4.156 ms. The prepared DAC differed in 189 samples from the no-fault replay;
+the recorder's stored hashes remained exact. H8 changed only wet admission to
+6 ms, preserving the dry period, device capacity and zero silent prefill.
+
+The 144-frame-capacity comparison passed 30 seconds but had three weak startup
+windows and a settled 257-frame offset. The selected 192-frame capacity showed
+249 frames in every one of its 577 windows. Earlier H5/H6 failures remain
+retained as incomplete takes. H6 still failed with 145,008 KiB locked: the host's
+perf trace identified a 6.219611 ms `migration_entry_wait_on_locked` at the PA
+library's `memset` GOT entry. This did not establish recorder-worker load as the
+cause; the subsequent temporary compaction condition is part of the observed
+host configuration.
+
+The recorder's ordinary push path checks and copies f64 samples; PCM24 encoding,
+stem writes and journal writes run on its independent worker. Setup touches the
+complete sample and descriptor rings before capture. This avoids untouched ring
+storage on wrap but does not lock memory or prove immunity to page faults,
+page migration or scheduling delays. The release binary contains no ordinary
+push-path allocation, mutex, wait or explicit system call.
+
+Runtime v12 onward explicitly treats legacy DAC stems as intended/prepared
+output. Exact PCM24 hashes validate recorded buffers; output-write completion
+and physical ADC correspondence require separate host evidence. A shutdown
+alarm can retain a separate exact ADC guard block outside the eight standard
+stems. GigPies owns that guard's format and acceptance record.
+
+GigPies `docs/AUDIO_HARDWARE.md` owns full conditions and private evidence,
+including `h8-trial-summary.json`, `h8-fault-assessment.json` and
+`h8-small-offset-review.json` under its ignored hardware artifacts. Standalone
+UI recording/playback, both-channel physical acceptance, native eight- or
+18-input capture, acoustic latency and full-show reliability remain open gates.
+
+### Earlier v7 recording and electrical evidence
+
 On October 3, GigPies exercised raw-library source commit `c390305` through its
-actual-device host. The accepted final v7 configuration uses AudioBox 48 kHz
+actual-device host. The earlier v7 configuration used AudioBox 48 kHz
 stereo S32 capture, 384-frame periods, a 3072-frame device buffer and a 768-frame
 (16 ms) wet-return budget, with native f64 PA `390a45f` and FX `6510ead9`.
 The eight recorded stems contained two physical
 ADC channels plus three stereo software taps: deterministic source stimulus,
-PA dry output and samples submitted to the DAC. Submitted DAC samples establish
-software output integrity; they are not a recording of the analog output.
+PA dry output and prepared DAC samples. The historical host called the final
+pair submitted DAC samples; these files establish the prepared software buffer
+contents, with output delivery assessed separately.
 
 | Experiment | Recorder result |
 | --- | --- |

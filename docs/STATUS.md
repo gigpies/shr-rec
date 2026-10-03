@@ -1,6 +1,6 @@
 # Development status
 
-Updated 2026-10-03. Stage 1 and the independent raw-library part of stage 2 in
+Updated 2026-10-04. Stage 1 and the independent raw-library part of stage 2 in
 [the plan](PLAN.md) are implemented.
 
 ## Independent raw recorder
@@ -34,7 +34,59 @@ is inferred from these synthetic fixtures.
 
 ### Embedded actual-device checkpoint (October 3)
 
-GigPies' final v7 host passed a 600-second actual-device/NVMe recording at
+#### H8: exact recording; physical continuity remains qualified
+
+GigPies runtime v13 (`1539915`) completed H8 at 48 kHz with 48-frame periods,
+192-frame device capacity, zero silent prefill and 288-frame (6 ms) wet admission.
+The owned audio thread used FIFO 20 on CPU 3, process memory locking and the
+trial's temporary `compact_unevictable_allowed=0` setting. The recorder remains
+source `c390305`, release SHA-256
+`6d3b0cfcb8134ffb6d0851fc9a3259b02cd57c36ac1ac4752e6109ff5b3e718a`.
+Separate offline 48/96-frame ABI checks also passed without changing that library.
+
+The 600-second take finalized complete with **28,800,000 frames per stem**.
+All eight PCM24 hashes, native ADC payload hashes, dry/prepared-DAC replay and
+journal were exact. There were zero recording drops, gaps, errors, USB xruns,
+queue errors or missing/expired wet returns; all 600,000 returns arrived.
+Render time peaked at 289.665 microseconds, with zero recorded render faults,
+context switches or measurement errors.
+
+Physical acceptance remains qualified. Of 11,977 windows, 11,975 met the
+correlation threshold, spanning 249–251 frames (5.1875–5.229167 ms); two 100 ms
+windows were weak. Refinement with 10 ms windows found one-frame offset increases
+near 513.71 seconds (correlation 0.580) and 520.30 seconds (0.782). No persistent
+step reached 24 frames, but the cause, exact converter sample continuity and
+clock lock remain unresolved. `requires_review` stays true. Exact stored samples
+do not prove physical sample continuity. The initial one-second quiet interval
+and final 100 ms are outside the reference-window coverage.
+
+Two 16-second packet-fault/restart trials each retained 768,000 exact frames,
+with continuous raw/dry recording, zero xruns and verified wet recovery. A forced
+xrun finalized 96,000 exact retained frames as incomplete with host fault 2;
+a new 30-second session retained 1,440,000 exact frames. The host restored its
+memory locks and scheduling, restored the compaction setting to 1, and released
+task resources after the trials.
+
+Earlier failures remain evidence. H7's 600-second take had every physical window
+at 249 frames but failed 4 ms wet admission with two missing/two expired returns,
+4.156 ms maximum RTT and 189 differences from the no-fault prepared-DAC reference.
+Its stored hashes were exact. H5/H6 retained incomplete takes; memory locking
+alone did not prevent H6's 6.219611 ms `migration_entry_wait_on_locked` at the PA
+library's `memset` GOT entry. No recorder-worker cause was established. The
+192-frame device capacity was selected over 144 after the smaller capacity's
+30-second trial had three weak startup windows and a higher settled offset.
+
+Runtime v12 onward labels legacy DAC stems as **intended/prepared output**.
+Their exact recording does not establish output-write completion or analog
+output continuity. The host retains a separate ADC guard block on a shutdown
+alarm. GigPies `docs/AUDIO_HARDWARE.md` and its private H8 trial, fault and offset
+reports own the full conditions, evidence and limits. These trials do not enable
+standalone UI recording/playback or establish both-channel physical acceptance,
+acoustic latency or full-show reliability.
+
+#### Earlier v7 recording and electrical evidence
+
+GigPies' v7 host passed a 600-second actual-device/NVMe recording at
 48 kHz with AudioBox stereo S32 capture, a 384-frame period, 3072-frame device
 buffer and 768-frame (16 ms) wet-return budget. Raw-library source `c390305`
 ran alongside native f64 PA `390a45f` and FX `6510ead9`. Eight stems each retained
