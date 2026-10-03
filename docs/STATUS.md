@@ -32,6 +32,33 @@ historical/exhaustive tests exist here. GigPies owns separate real-device host
 acceptance and source-to-stem mapping. No physical bit depth or device continuity
 is inferred from these synthetic fixtures.
 
+### Embedded actual-device checkpoint (October 3)
+
+GigPies exercised the raw library at source commit `c390305` with an AudioBox
+at 48 kHz, stereo S32 capture, 192-frame periods and a 768-frame device buffer.
+The recorder wrote eight stems: **two physical ADC channels and six software
+taps** (source stimulus, PA dry output and submitted DAC samples, each stereo).
+A 600-second NVMe take retained 28,800,000 frames per stem. Every PCM24 payload
+hash matched the host, the full journal was contiguous, and PA dry replay was
+exact. There were zero xruns, recording gaps/drops, clips or finalization errors.
+The overall integration failed its 8 ms wet-return target once; that failure
+and the recording are retained in the GigPies evidence.
+
+Two 15-second transport fault/restart trials retained 720,000 exact dry/recorded
+frames each without xruns. A forced 100 ms local driver stall closed a 96,000-frame
+take as incomplete with host fault 2; a fresh 30-second session retained 1,440,000
+exact frames. Host v5 then explicitly selected the most significant 24 bits from
+S32 and passed a separate 30-second direct ADC-byte comparison. Source bit
+metadata describes this nominal selected payload, not effective converter
+resolution. The revised 16 ms wet-return budget passed 30 seconds; repeated
+fault checks and its final soak remain pending at this checkpoint.
+
+The [raw-library hardware checkpoint](RAW_RECORDER.md#embedded-hardware-checkpoint)
+records the interpretation limits. GigPies `docs/AUDIO_HARDWARE.md` owns the
+complete metrics and private evidence paths. These results do not enable the
+standalone UI or playback, establish native eight-channel capture, or establish
+physical end-to-end/acoustic latency.
+
 ## Foundation delivery (September 7)
 
 ## Delivered

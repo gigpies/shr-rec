@@ -14,7 +14,8 @@ shell remains disconnected from recording/playback.
    maximum callback frames, queue-block count and source epoch. Creation waits
    for the worker to prepare files, synchronize its incomplete manifest and
    allocate scratch storage. Existing paths are never overwritten.
-2. Optionally declare actual source precision using `set_source_bits`. A 16-bit
+2. Optionally declare nominal selected source payload bits using `set_source_bits`.
+   This metadata does not measure effective converter resolution (ENOB). A 16-bit
    source remains 16-bit in the result even though WAV storage uses PCM24. Omitted
    precision remains unknown. The host retains physical route/channel labels;
    ordered generic stem indices do not claim physical channel identities.
@@ -112,3 +113,39 @@ written period, recovers all 192 common frames and verifies the original payload
 is unchanged. No long soak, live device, network, playback or
 acoustic test is implicit in these commands. GigPies owns separate integration
 and actual-device evidence; no standalone shell audio acceptance is claimed.
+
+## Embedded hardware checkpoint
+
+On October 3, GigPies exercised raw-library source commit `c390305` through its
+actual-device host. The AudioBox opened at 48 kHz, stereo S32 capture, 192-frame
+periods and a 768-frame buffer. The eight recorded stems contained two physical
+ADC channels plus three stereo software taps: deterministic source stimulus,
+PA dry output and samples submitted to the DAC. Submitted DAC samples establish
+software output integrity; they are not a recording of the analog output.
+
+| Experiment | Recorder result |
+| --- | --- |
+| Initial 600-second NVMe take | 28,800,000 frames per stem; all eight PCM24 payload hashes matched the host; full source journal contiguous; exact PA dry replay; zero xruns, gaps, drops, clips or finalization errors |
+| Two 15-second transport fault/restart trials | 720,000 frames each; exact dry and recorded samples; zero xruns |
+| Forced 100 ms local driver stall | 96,000 retained frames; incomplete take with host fault 2 |
+| New session after the driver stall | 30 seconds / 1,440,000 exact frames |
+| Host v5 explicit MSB24 capture mapping | Separate 30-second trial passed direct ADC-byte-to-PCM24 comparison |
+
+The first soak had one wet-network admission deadline miss at the original 8 ms
+budget. That is a retained integration failure despite intact recording. A
+revised 16 ms wet-return budget passed a 30-second trial; repeated fault checks
+and the final soak for that configuration remain pending at this checkpoint.
+
+The USB descriptor reported 24 bits while ALSA reported 32 significant bits;
+observed low bytes included 0 and 3. Host v5 therefore explicitly selects the
+most significant 24 bits from the S32 payload before supplying ADC samples to
+this library. Its direct byte comparison validates that mapping separately from
+the earlier host-to-WAV hash checks. `source_valid_bits` describes nominal
+selected payload precision; it is not a measurement of ADC effective resolution.
+Mixed physical/software channel identity stays in the host's source-to-stem map.
+
+GigPies `docs/AUDIO_HARDWARE.md` owns the complete measurements, failures and
+private evidence locations. This checkpoint establishes the embedded library's
+observed recording behavior in that two-input configuration. Standalone UI
+recording/playback, native eight- or eighteen-input capture, analog loopback,
+acoustic latency and full-show reliability remain separate acceptance gates.
