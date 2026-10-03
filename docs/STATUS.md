@@ -34,15 +34,26 @@ is inferred from these synthetic fixtures.
 
 ### Embedded actual-device checkpoint (October 3)
 
-GigPies exercised the raw library at source commit `c390305` with an AudioBox
-at 48 kHz, stereo S32 capture, 192-frame periods and a 768-frame device buffer.
-The recorder wrote eight stems: **two physical ADC channels and six software
-taps** (source stimulus, PA dry output and submitted DAC samples, each stereo).
-A 600-second NVMe take retained 28,800,000 frames per stem. Every PCM24 payload
-hash matched the host, the full journal was contiguous, and PA dry replay was
-exact. There were zero xruns, recording gaps/drops, clips or finalization errors.
-The overall integration failed its 8 ms wet-return target once; that failure
-and the recording are retained in the GigPies evidence.
+GigPies' final v7 host passed a 600-second actual-device/NVMe recording at
+48 kHz with AudioBox stereo S32 capture, a 384-frame period, 3072-frame device
+buffer and 768-frame (16 ms) wet-return budget. Raw-library source `c390305`
+ran alongside native f64 PA `390a45f` and FX `6510ead9`. Eight stems each retained
+28,800,000 frames: **two physical ADC channels and six software taps** (source
+stimulus, PA dry output and submitted DAC samples, each stereo). All eight PCM24
+payload hashes and direct ADC-byte hashes matched; dry/DAC replay and the full
+journal were exact. All 600,000 FX returns arrived with zero missing/expired
+returns, xruns or queue errors. Recording had no gaps, drops, clips or faults.
+
+The same v7 configuration passed separate 15-second packet-fault and worker-
+restart trials: raw/dry continuity remained exact, no xruns occurred and both
+wet channels recovered. A forced 100 ms driver stall retained 96,000 frames
+and correctly marked the take incomplete. These are bounded acceptance results;
+standalone UI recording and playback remain pending.
+
+Earlier 192-frame-period / 768-frame-buffer trials are retained separately.
+Their initial 600-second recording had exact PCM24 hashes, journal and PA dry
+replay without recording errors, but the overall integration missed its 8 ms
+wet-return target once. That failed target remains part of the evidence.
 
 Two 15-second transport fault/restart trials retained 720,000 exact dry/recorded
 frames each without xruns. A forced 100 ms local driver stall closed a 96,000-frame
@@ -50,14 +61,16 @@ take as incomplete with host fault 2; a fresh 30-second session retained 1,440,0
 exact frames. Host v5 then explicitly selected the most significant 24 bits from
 S32 and passed a separate 30-second direct ADC-byte comparison. Source bit
 metadata describes this nominal selected payload, not effective converter
-resolution. The revised 16 ms wet-return budget passed 30 seconds; repeated
-fault checks and its final soak remain pending at this checkpoint.
+resolution. The v7 soak above completes the repeated fault and 600-second checks
+for the revised 16 ms wet-return budget and larger device buffer.
 
 The [raw-library hardware checkpoint](RAW_RECORDER.md#embedded-hardware-checkpoint)
 records the interpretation limits. GigPies `docs/AUDIO_HARDWARE.md` owns the
 complete metrics and private evidence paths. These results do not enable the
 standalone UI or playback, establish native eight-channel capture, or establish
-physical end-to-end/acoustic latency.
+physical end-to-end/acoustic latency. Both physical output-to-input connections
+are now present, but that separate physical acceptance has not yet been measured
+at this documentation checkpoint.
 
 ## Foundation delivery (September 7)
 

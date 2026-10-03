@@ -117,24 +117,35 @@ and actual-device evidence; no standalone shell audio acceptance is claimed.
 ## Embedded hardware checkpoint
 
 On October 3, GigPies exercised raw-library source commit `c390305` through its
-actual-device host. The AudioBox opened at 48 kHz, stereo S32 capture, 192-frame
-periods and a 768-frame buffer. The eight recorded stems contained two physical
+actual-device host. The accepted final v7 configuration uses AudioBox 48 kHz
+stereo S32 capture, 384-frame periods, a 3072-frame device buffer and a 768-frame
+(16 ms) wet-return budget, with native f64 PA `390a45f` and FX `6510ead9`.
+The eight recorded stems contained two physical
 ADC channels plus three stereo software taps: deterministic source stimulus,
 PA dry output and samples submitted to the DAC. Submitted DAC samples establish
 software output integrity; they are not a recording of the analog output.
 
 | Experiment | Recorder result |
 | --- | --- |
-| Initial 600-second NVMe take | 28,800,000 frames per stem; all eight PCM24 payload hashes matched the host; full source journal contiguous; exact PA dry replay; zero xruns, gaps, drops, clips or finalization errors |
-| Two 15-second transport fault/restart trials | 720,000 frames each; exact dry and recorded samples; zero xruns |
+| Final v7 600-second NVMe take | 28,800,000 frames per stem; all eight PCM24 hashes and direct ADC-byte hashes exact; dry/DAC replay and full journal exact; no clipping, recording faults or xruns |
+| Final v7 packet-fault and restart trials, 15 seconds each | Exact raw/dry continuity, zero xruns and both wet channels recovered |
+| Earlier 600-second take, 192-frame period / 768-frame buffer | 28,800,000 frames per stem; all eight PCM24 payload hashes matched the host; full source journal contiguous; exact PA dry replay; zero xruns, gaps, drops, clips or finalization errors |
+| Earlier two 15-second transport fault/restart trials | 720,000 frames each; exact dry and recorded samples; zero xruns |
 | Forced 100 ms local driver stall | 96,000 retained frames; incomplete take with host fault 2 |
 | New session after the driver stall | 30 seconds / 1,440,000 exact frames |
 | Host v5 explicit MSB24 capture mapping | Separate 30-second trial passed direct ADC-byte-to-PCM24 comparison |
 
+The final v7 soak received all 600,000 FX returns with zero missing/expired
+returns or queue errors. Its host SHA-256 is
+`c4b8627790797cda04dc95ff5f3c4454c46ba142f77772f8557123b50694d7c5`.
+GigPies retains the recording and verification under ignored
+`artifacts/audio-hardware/2026-10-03/soak-600s-buffer8-v7/`.
+
 The first soak had one wet-network admission deadline miss at the original 8 ms
-budget. That is a retained integration failure despite intact recording. A
-revised 16 ms wet-return budget passed a 30-second trial; repeated fault checks
-and the final soak for that configuration remain pending at this checkpoint.
+budget. That remains a retained integration failure despite intact recording.
+The final v7 fault checks and soak establish the observed revised 16 ms
+wet-return configuration with its larger device buffer; they do not convert
+that admission budget into a physical end-to-end latency measurement.
 
 The USB descriptor reported 24 bits while ALSA reported 32 significant bits;
 observed low bytes included 0 and 3. Host v5 therefore explicitly selects the
@@ -146,6 +157,9 @@ Mixed physical/software channel identity stays in the host's source-to-stem map.
 
 GigPies `docs/AUDIO_HARDWARE.md` owns the complete measurements, failures and
 private evidence locations. This checkpoint establishes the embedded library's
-observed recording behavior in that two-input configuration. Standalone UI
-recording/playback, native eight- or eighteen-input capture, analog loopback,
-acoustic latency and full-show reliability remain separate acceptance gates.
+observed recording behavior in that two-input configuration. Both physical
+output-to-input connections are now present; a separate generated-signal test
+is being prepared without an ADC feedback path, and physical acceptance remains
+unmeasured at this checkpoint. Standalone UI recording/playback, native eight-
+or eighteen-input capture, analog loopback, acoustic latency and full-show
+reliability remain separate acceptance gates.
