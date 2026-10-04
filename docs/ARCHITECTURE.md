@@ -16,9 +16,11 @@ Stopped -> Exited
 
 Effects tell a future engine adapter what to do. Recording readiness follows
 worker startup, and completion follows producer quiescence and worker join.
-Late readiness after stop/failure is rejected. An adapter must join an old
-operation before starting another; this initial protocol has no cross-operation
-message IDs and must not receive delayed messages from retired workers.
+Late readiness after stop/failure is rejected. Each capture has a monotonically
+increasing operation ID carried by preparation/finalization effects and worker
+readiness/completion. Retired-operation messages are rejected even after a new
+capture starts. An adapter must still quiesce and join the old worker before
+acknowledging completion and starting another operation.
 
 Exit during Starting/Recording opens confirmation. Cancel preserves capture;
 Stop and finalize waits in Finalizing. Exit during finalization also waits.
