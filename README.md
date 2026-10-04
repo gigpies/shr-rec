@@ -12,7 +12,8 @@ timeline. Runs directly or as gadget `rec` from a launcher.
 provides input slots, session-only arming, private configuration, touch/keyboard
 controls and clean Exit. The [raw recorder](docs/RAW_RECORDER.md) accepts host-supplied
 samples through Rust or a versioned C ABI and writes aligned PCM24 stems with
-explicit integrity and recovery. Shell recording, playback, meters and MIDI are
+explicit integrity and recovery. Operation-correlated lifecycle and an independent
+version 2 observer expose accepted/written progress and final outcome. Shell recording, playback, meters and MIDI are
 not connected.
 
 ## Try the current shell

@@ -47,6 +47,69 @@ every 256 written blocks against a 16 MiB reserve; concurrent writers can still
 consume space, so every write, finalization and synchronization error also fails
 the take. PCM payload rate is `sample_rate * channels * 3` bytes per second.
 
+## Operation lifecycle and version 2 observer
+
+`Session` allocates a monotonically increasing operation ID for each accepted
+Start. `PrepareCapture(id)` means accepted preparation, not writer readiness.
+Readiness and completion carry that same ID. Stop during preparation emits one
+`QuiesceAndFinalize(id)` and remains Finalizing until the adapter has quiesced
+any producer and cleaned up/joined the preparing writer. Late readiness, retired
+completion and duplicate completion are rejected. Repeated Stop emits no work;
+Start remains refused during preparation/finalization. The adapter must consume
+one raw handle with one finish after producer quiescence. This protocol does not
+connect the shell to an audio adapter.
+
+The additive `shr_rec_v2_observer_*` symbols preserve every v1 signature and raw
+format. Create an observer **off callback while the producer is quiesced**, then
+query it independently of pushes. It owns a refcounted atomic allocation, never
+a pointer/reference into Recorder or its queues. Retain creates another handle;
+release consumes that handle. Create/retain/release allocate or free and belong
+off callback. An observer survives consuming finish; keep each observer handle
+alive throughout its query and never race release with use. No callback path
+decrements a reference count. Rust hosts use `Recorder::observer()` with the
+same setup-only lifetime rule.
+
+`shr_rec_progress_v2` is a fixed 96-byte layout. Snapshot requires its exact size
+and rejects null handles/output or wrong size with -1 without writing output.
+Success returns 0, version 2 and reserved zero. State is 1 ready/recording,
+2 finalizing or 3 finalized. Outcome is 0 pending, 1 complete, 2 incomplete or
+3 error, including a join panic. Writer fault is boolean; host fault retains the
+first nonzero host-defined code. Epoch is immutable. Take ID, operation ID and
+ordered source mapping remain the host's identities, separate from raw-v1 stems.
+
+Accepted frames entered the bounded queues; written frames reached **all** stems
+and the timeline journal. A partial stem write does not advance written frames.
+Neither counter proves fsync. Durable frames is always `UINT64_MAX` (unknown),
+including after successful finish; finalization is not power-loss certification.
+Snapshots include dropped frames/overflow blocks, source gaps, invalid blocks,
+clipped samples and faults. Active fields are individually monotonic and weakly
+consistent. Accepted is published before descriptors; writer releases written
+only after all writes. Query acquires written before accepted, preserving
+written ≤ accepted. Finish/drop joins, sets faults/outcome and release-publishes
+terminal outcome; query acquires outcome before final counters. A complete
+outcome appears only after successful drain/finalize/sync, never merely a write.
+Poll at ≤10 Hz on a control worker; queries read a fixed number of atomics, never
+scan growing files, block capture or traverse mutable producer state.
+
+[E06 corpus](../tests/fixtures/crec/v1/e06.json) executes the real Session in the
+normal suite, including operation 17, retired operation 16, duplicate Start/Stop
+and completion. The [C runner](../tests/fixtures/crec/v1/observer.c) invokes the
+real v1 producer/v2 observer and checks both PCM24 stems exactly. Run after the
+release build (use the coordinator's build helper during task0009):
+
+```sh
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/fixtures/crec/v1/observer.c \
+  -Ltarget/release -Wl,-rpath,"$PWD/target/release" -lshr_rec -o /tmp/rec-observer
+scratch=$(mktemp -d)
+/tmp/rec-observer "$scratch/take"
+rm -r "$scratch"
+rm /tmp/rec-observer
+```
+
+The valid active 96 accepted / 48 written example is a possible asynchronous
+progress state, not an imposed scheduler timing assertion. Actual final progress
+is 96 accepted/written and unknown durability. No endpoint discovery is involved.
+
 ## Native raw format version 1
 
 This focused host format is separate from SHR-DAW's `session.json` format and

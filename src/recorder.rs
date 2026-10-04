@@ -87,6 +87,10 @@ pub struct Report {
 #[derive(Default)]
 struct Shared {
     stopping: AtomicBool,
+    accepted: AtomicU64,
+    written: AtomicU64,
+    clipped: AtomicU64,
+    outcome: AtomicU32,
     writer_failed: AtomicBool,
     dropped: AtomicU64,
     overflows: AtomicU64,
@@ -94,6 +98,68 @@ struct Shared {
     invalid: AtomicU64,
     external: AtomicU32,
     source_bits: AtomicU32,
+}
+
+/// Independent atomic status allocation. Create/clone/drop off callback only.
+/// It may outlive the recorder and never borrows its producer queues.
+#[derive(Clone)]
+pub struct Observer {
+    shared: Arc<Shared>,
+    epoch: u64,
+}
+
+/// Version 2 fixed-size progress. Active counters are individually monotonic,
+/// not a transactional snapshot. Terminal outcome publishes final counters.
+#[derive(Clone, Copy, Debug, Default)]
+#[repr(C)]
+pub struct Progress {
+    pub version: u32,
+    pub state: u32,
+    pub outcome: u32,
+    pub writer_fault: u32,
+    pub host_fault: u32,
+    pub reserved: u32,
+    pub epoch: u64,
+    pub accepted_frames: u64,
+    pub written_frames: u64,
+    pub durable_frames: u64,
+    pub dropped_frames: u64,
+    pub overflow_blocks: u64,
+    pub gap_frames: u64,
+    pub invalid_blocks: u64,
+    pub clipped_samples: u64,
+}
+
+impl Observer {
+    /// Bounded atomics only. Callers should poll at most 10 Hz off callback.
+    pub fn snapshot(&self) -> Progress {
+        let shared = &self.shared;
+        let outcome = shared.outcome.load(Ordering::Acquire);
+        let written = shared.written.load(Ordering::Acquire);
+        Progress {
+            version: 2,
+            state: if outcome != 0 {
+                3
+            } else if shared.stopping.load(Ordering::Acquire) {
+                2
+            } else {
+                1
+            },
+            outcome,
+            writer_fault: u32::from(shared.writer_failed.load(Ordering::Acquire)),
+            host_fault: shared.external.load(Ordering::Relaxed),
+            reserved: 0,
+            epoch: self.epoch,
+            accepted_frames: shared.accepted.load(Ordering::Acquire),
+            written_frames: written,
+            durable_frames: u64::MAX,
+            dropped_frames: shared.dropped.load(Ordering::Relaxed),
+            overflow_blocks: shared.overflows.load(Ordering::Relaxed),
+            gap_frames: shared.gaps.load(Ordering::Relaxed),
+            invalid_blocks: shared.invalid.load(Ordering::Relaxed),
+            clipped_samples: shared.clipped.load(Ordering::Relaxed),
+        }
+    }
 }
 
 /// Single-producer handle. Quiesce all calls before `finish` or drop.
@@ -175,6 +241,13 @@ impl Recorder {
         })
     }
 
+    pub fn observer(&self) -> Observer {
+        Observer {
+            shared: self.shared.clone(),
+            epoch: self.config.epoch,
+        }
+    }
+
     /// Bounded, allocation/lock/I/O-free. Whole interleaved blocks only.
     /// 0 = accepted, 1 = queue overflow, -1 = invalid/timeline reversal,
     /// -2 = writer fault. Forward gaps are retained and mark the take incomplete.
@@ -211,6 +284,9 @@ impl Recorder {
         self.samples
             .push_entire_slice(interleaved)
             .expect("reserved sample slots");
+        self.shared
+            .accepted
+            .fetch_add(u64::from(frames), Ordering::Release);
         self.blocks
             .push(Block {
                 source_frame,
@@ -246,11 +322,23 @@ impl Recorder {
 
     fn join(&mut self) -> Result<Report> {
         self.shared.stopping.store(true, Ordering::Release);
-        self.worker
-            .take()
-            .context("already finalized")?
-            .join()
-            .map_err(|_| anyhow::anyhow!("recorder writer panicked; retain incomplete take"))?
+        let result = match self.worker.take() {
+            Some(worker) => worker
+                .join()
+                .map_err(|_| anyhow::anyhow!("recorder writer panicked; retain incomplete take"))
+                .and_then(|result| result),
+            None => Err(anyhow::anyhow!("already finalized")),
+        };
+        let outcome = match &result {
+            Ok(report) if report.status == "complete" => 1,
+            Ok(_) => 2,
+            Err(_) => {
+                self.shared.writer_failed.store(true, Ordering::Release);
+                3
+            }
+        };
+        self.shared.outcome.store(outcome, Ordering::Release);
+        result
     }
 }
 
@@ -494,6 +582,7 @@ fn write_take(
                     let quantized = (sample * 8_388_608.0).round();
                     if !(-8_388_608.0..=8_388_607.0).contains(&quantized) {
                         clipped += 1;
+                        shared.clipped.fetch_add(1, Ordering::Relaxed);
                     }
                     let bytes = (quantized.clamp(-8_388_608.0, 8_388_607.0) as i32).to_le_bytes();
                     encoded[frame * 3..frame * 3 + 3].copy_from_slice(&bytes[..3]);
@@ -510,6 +599,7 @@ fn write_take(
             )?;
             files.timeline.write_all(b"\n")?;
             frames += u64::from(block.frames);
+            shared.written.store(frames, Ordering::Release);
             written_blocks += 1;
         }
         Ok(())
@@ -551,6 +641,55 @@ fn write_take(
         return Err(error);
     }
     Ok(report)
+}
+
+/// Create off callback while the producer is quiesced. Observer owns only atomics.
+/// # Safety
+/// `handle` must be live and exclusively available for this setup call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shr_rec_v2_observer_create(handle: *mut Recorder) -> *mut Observer {
+    match unsafe { handle.as_ref() } {
+        Some(recorder) => Box::into_raw(Box::new(recorder.observer())),
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// # Safety
+/// Observer must remain live during this off-callback call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shr_rec_v2_observer_retain(observer: *const Observer) -> *mut Observer {
+    match unsafe { observer.as_ref() } {
+        Some(observer) => Box::into_raw(Box::new(observer.clone())),
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// # Safety
+/// Consumes one observer handle off callback; no use may race its release.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shr_rec_v2_observer_release(observer: *mut Observer) {
+    if !observer.is_null() {
+        drop(unsafe { Box::from_raw(observer) });
+    }
+}
+
+/// # Safety
+/// Observer must be live; output must be writable, aligned and unaliased for
+/// `output_size` bytes. Never release this observer while querying it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shr_rec_v2_observer_snapshot(
+    observer: *const Observer,
+    output: *mut Progress,
+    output_size: u32,
+) -> i32 {
+    if observer.is_null()
+        || output.is_null()
+        || output_size as usize != std::mem::size_of::<Progress>()
+    {
+        return -1;
+    }
+    unsafe { output.write((&*observer).snapshot()) };
+    0
 }
 
 /// Copy validated common whole frames to a NEW destination. Source files are
@@ -829,6 +968,159 @@ mod tests {
     }
 
     #[test]
+    fn observer_survives_complete_incomplete_error_and_drop() {
+        let temp = Temp::new();
+        for (name, expected) in [("complete", 1), ("fault", 2), ("error", 3), ("drop", 2)] {
+            let path = temp.path(name);
+            let mut recorder = Recorder::create(&path, config()).unwrap();
+            let observer = recorder.observer();
+            let retained = observer.clone();
+            assert_eq!(observer.snapshot().outcome, 0);
+            assert_eq!(recorder.push(48048, &[0.25, -0.25], 1), 0);
+            if name == "fault" {
+                recorder.mark_fault(17);
+            }
+            if name == "error" {
+                fs::write(path.join("channel-002.wav"), b"collision").unwrap();
+            }
+            if name == "drop" {
+                drop(recorder);
+            } else {
+                let result = recorder.finish();
+                assert_eq!(result.is_err(), name == "error");
+            }
+            drop(observer);
+            let status = retained.snapshot();
+            assert_eq!(status.state, 3);
+            assert_eq!(status.outcome, expected);
+            assert_eq!(status.accepted_frames, 1);
+            assert_eq!(status.written_frames, 1);
+            assert_eq!(status.durable_frames, u64::MAX);
+            assert_eq!(status.writer_fault, u32::from(name == "error"));
+        }
+    }
+
+    #[test]
+    fn observer_queries_concurrently_with_exclusive_producer() {
+        let temp = Temp::new();
+        let mut recorder = Recorder::create(&temp.path("concurrent"), config()).unwrap();
+        let observer = recorder.observer();
+        let query = observer.clone();
+        let reader = thread::spawn(move || {
+            loop {
+                let status = query.snapshot();
+                assert!(status.written_frames <= status.accepted_frames);
+                if status.outcome != 0 {
+                    assert_eq!(status.state, 3);
+                    assert_eq!(status.accepted_frames, status.written_frames);
+                    return status;
+                }
+                thread::yield_now();
+            }
+        });
+        for period in 0..1000 {
+            let _ = recorder.push(period * 192, &[0.0; 384], 192);
+        }
+        recorder.finish().unwrap();
+        let status = reader.join().unwrap();
+        assert_eq!(status.accepted_frames + status.dropped_frames, 192000);
+        assert_eq!(observer.snapshot().written_frames, status.written_frames);
+    }
+
+    #[test]
+    fn observer_join_panic_publishes_error() {
+        let temp = Temp::new();
+        let mut recorder = Recorder::create(&temp.path("panic"), config()).unwrap();
+        let observer = recorder.observer();
+        recorder.shared.stopping.store(true, Ordering::Release);
+        recorder.worker.take().unwrap().join().unwrap().unwrap();
+        recorder.worker = Some(thread::spawn(|| panic!("synthetic writer panic")));
+        assert!(recorder.finish().is_err());
+        let status = observer.snapshot();
+        assert_eq!(
+            (status.state, status.outcome, status.writer_fault),
+            (3, 3, 1)
+        );
+    }
+
+    #[test]
+    fn abi_observer_bounds_lifetime_and_samples() {
+        let temp = Temp::new();
+        let path = temp.path("abi");
+        let cpath = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+        unsafe {
+            let handle = shr_rec_v1_create(cpath.as_ptr(), 48000, 2, 48, 8, 9);
+            assert!(!handle.is_null());
+            let observer = shr_rec_v2_observer_create(handle);
+            let retained = shr_rec_v2_observer_retain(observer);
+            let mut progress = Progress {
+                version: 123,
+                ..Progress::default()
+            };
+            let size = std::mem::size_of::<Progress>() as u32;
+            assert_eq!(size, 96);
+            assert_eq!(
+                shr_rec_v2_observer_snapshot(observer, &mut progress, size - 1),
+                -1
+            );
+            assert_eq!(progress.version, 123);
+            assert_eq!(
+                shr_rec_v2_observer_snapshot(std::ptr::null(), &mut progress, size),
+                -1
+            );
+            assert_eq!(progress.version, 123);
+            assert_eq!(
+                shr_rec_v2_observer_snapshot(observer, std::ptr::null_mut(), size),
+                -1
+            );
+            let mut samples = [0.0; 96];
+            for frame in 0..48 {
+                samples[frame * 2] = (frame as f64 + 1.0) / 8388608.0;
+                samples[frame * 2 + 1] = -(frame as f64 + 1.0) / 8388608.0;
+            }
+            for block in 0..2 {
+                assert_eq!(
+                    shr_rec_v1_push(handle, 48048 + block * 48, samples.as_ptr(), 48),
+                    0
+                );
+                assert_eq!(
+                    shr_rec_v2_observer_snapshot(observer, &mut progress, size),
+                    0
+                );
+                assert!(progress.written_frames <= progress.accepted_frames);
+                assert_eq!(progress.outcome, 0);
+            }
+            shr_rec_v2_observer_release(observer);
+            assert_eq!(shr_rec_v1_finish(handle), 0);
+            assert_eq!(
+                shr_rec_v2_observer_snapshot(retained, &mut progress, size),
+                0
+            );
+            assert_eq!(
+                (
+                    progress.version,
+                    progress.state,
+                    progress.outcome,
+                    progress.epoch
+                ),
+                (2, 3, 1, 9)
+            );
+            assert_eq!(
+                (progress.accepted_frames, progress.written_frames),
+                (96, 96)
+            );
+            assert_eq!(progress.reserved, 0);
+            shr_rec_v2_observer_release(retained);
+            let expected: Vec<i32> = (1..=48).cycle().take(96).collect();
+            assert_eq!(decode(&path.join("channel-001.wav")), expected);
+            assert_eq!(
+                decode(&path.join("channel-002.wav")),
+                expected.iter().map(|x| -x).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
     fn preserves_pcm24_extremes_channel_order_timeline_and_odd_padding() {
         let temp = Temp::new();
         let path = temp.path("take");
@@ -861,6 +1153,7 @@ mod tests {
     fn forward_gap_invalid_source_and_external_fault_never_complete() {
         let temp = Temp::new();
         let mut recorder = Recorder::create(&temp.path("take"), config()).unwrap();
+        let observer = recorder.observer();
         assert_eq!(recorder.push(0, &[0.0; 4], 2), 0);
         assert_eq!(recorder.push(8, &[0.0; 4], 2), 0);
         assert_eq!(recorder.push(9, &[0.0; 4], 2), -1);
@@ -869,6 +1162,19 @@ mod tests {
         recorder.mark_fault(4);
         recorder.mark_fault(5);
         let report = recorder.finish().unwrap();
+        let status = observer.snapshot();
+        assert_eq!(
+            (status.gap_frames, status.invalid_blocks, status.host_fault),
+            (6, 3, 4)
+        );
+        assert_eq!(
+            (
+                status.accepted_frames,
+                status.written_frames,
+                status.outcome
+            ),
+            (4, 4, 2)
+        );
         assert_eq!(report.status, "incomplete");
         assert_eq!(
             (
@@ -931,12 +1237,14 @@ mod tests {
         let recorder = Recorder::create(&temp.path("empty"), config()).unwrap();
         assert_eq!(recorder.finish().unwrap().status, "incomplete");
         let mut recorder = Recorder::create(&temp.path("clip"), config()).unwrap();
+        let observer = recorder.observer();
         assert_eq!(recorder.push(0, &[2.0, -2.0], 1), 0);
         let report = recorder.finish().unwrap();
         assert_eq!(
             (report.status.as_str(), report.clipped_samples),
             ("incomplete", 2)
         );
+        assert_eq!(observer.snapshot().clipped_samples, 2);
         let mut recorder = Recorder::create(&temp.path("drop"), config()).unwrap();
         assert_eq!(recorder.push(0, &[0.0; 2], 1), 0);
         drop(recorder);

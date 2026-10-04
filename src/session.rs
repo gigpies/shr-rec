@@ -17,8 +17,8 @@ pub enum Transport {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Effect {
     None,
-    PrepareCapture,
-    QuiesceAndFinalize,
+    PrepareCapture(u64),
+    QuiesceAndFinalize(u64),
     StartPlayback,
     PausePlayback,
     ResumePlayback,
@@ -39,6 +39,8 @@ pub struct Session {
     exit_confirmation: bool,
     exit_after_stop: bool,
     retained: Option<RetainedTake>,
+    next_operation: u64,
+    operation: Option<u64>,
 }
 
 impl Default for Session {
@@ -48,6 +50,8 @@ impl Default for Session {
             exit_confirmation: false,
             exit_after_stop: false,
             retained: None,
+            next_operation: 1,
+            operation: None,
         }
     }
 }
@@ -63,18 +67,26 @@ impl Session {
         self.retained.as_ref()
     }
 
+    /// Current accepted capture operation; retired completions must retain their original ID.
+    pub fn operation(&self) -> Option<u64> {
+        self.operation
+    }
+
     pub fn record(&mut self) -> Result<Effect, &'static str> {
         if self.transport != Transport::Stopped {
             return Err("Stop before recording");
         }
+        let operation = self.next_operation;
+        self.next_operation = operation.checked_add(1).ok_or("Operation IDs exhausted")?;
+        self.operation = Some(operation);
         self.retained = None;
         self.transport = Transport::Starting;
-        Ok(Effect::PrepareCapture)
+        Ok(Effect::PrepareCapture(operation))
     }
 
     /// The worker has opened all files and is ready to consume the ring.
-    pub fn capture_ready(&mut self) -> Result<(), &'static str> {
-        if self.transport != Transport::Starting {
+    pub fn capture_ready(&mut self, operation: u64) -> Result<(), &'static str> {
+        if self.operation != Some(operation) || self.transport != Transport::Starting {
             return Err("Unexpected writer readiness");
         }
         self.transport = Transport::Recording;
@@ -83,13 +95,20 @@ impl Session {
 
     /// Used for both startup failure and normal/faulted finalization. The adapter
     /// must first quiesce the producer and join the worker, including on failure.
-    pub fn capture_finished(&mut self, take: RetainedTake) -> Result<Effect, &'static str> {
-        if !matches!(
-            self.transport,
-            Transport::Starting | Transport::Recording | Transport::Finalizing
-        ) {
+    pub fn capture_finished(
+        &mut self,
+        operation: u64,
+        take: RetainedTake,
+    ) -> Result<Effect, &'static str> {
+        if self.operation != Some(operation)
+            || !matches!(
+                self.transport,
+                Transport::Starting | Transport::Recording | Transport::Finalizing
+            )
+        {
             return Err("Unexpected capture completion");
         }
+        self.operation = None;
         let complete = take.complete;
         self.retained = Some(take);
         self.transport = Transport::Stopped;
@@ -130,7 +149,7 @@ impl Session {
         match self.transport {
             Transport::Starting | Transport::Recording => {
                 self.transport = Transport::Finalizing;
-                Effect::QuiesceAndFinalize
+                Effect::QuiesceAndFinalize(self.operation.expect("active capture"))
             }
             Transport::Playing | Transport::Paused => {
                 self.transport = Transport::StoppingPlayback;

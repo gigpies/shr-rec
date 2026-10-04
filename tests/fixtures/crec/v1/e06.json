@@ -1,0 +1,24 @@
+{
+  "contract": "C-REC:1/E06",
+  "take_id": "take-01",
+  "operation_id": 17,
+  "source_epoch": 9,
+  "mapping": ["channel-001=input-01/raw", "channel-002=input-02/raw"],
+  "source_frame": 48048,
+  "period_frames": 48,
+  "periods": 2,
+  "events": [
+    {"event":"start", "state":"Starting", "effect":"PrepareCapture(17)"},
+    {"event":"duplicate_start", "state":"Starting", "effect":"rejected"},
+    {"event":"old_ready", "state":"Starting", "effect":"rejected"},
+    {"event":"old_finished", "state":"Starting", "effect":"rejected"},
+    {"event":"ready", "state":"Recording", "effect":"none"},
+    {"event":"stop", "state":"Finalizing", "effect":"QuiesceAndFinalize(17)"},
+    {"event":"duplicate_stop", "state":"Finalizing", "effect":"None"},
+    {"event":"late_ready", "state":"Finalizing", "effect":"rejected"},
+    {"event":"finished", "state":"Stopped", "effect":"None"},
+    {"event":"duplicate_finished", "state":"Stopped", "effect":"rejected"}
+  ],
+  "final_progress": {"version":2,"state":3,"outcome":1,"accepted_frames":96,"written_frames":96,"durable_frames":null},
+  "limits": ["Synthetic owner lifecycle and supplied samples; no endpoint discovery", "Active progress is weakly consistent; 96 accepted / 48 written is valid but not a deterministic scheduled observation", "Operation/take/mapping belong to host, not raw-v1 manifest"]
+}

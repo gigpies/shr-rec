@@ -39,6 +39,7 @@ fn production_push_and_fault_paths_do_not_allocate_or_free() {
         },
     )
     .unwrap();
+    let observer = recorder.observer();
     let samples = [0.0; 8 * 192];
     CALLBACK.with(|active| active.set(true));
     let first = recorder.push(0, &samples, 192);
@@ -47,7 +48,9 @@ fn production_push_and_fault_paths_do_not_allocate_or_free() {
         let _ = recorder.push(index * 192, &samples, 192);
     }
     recorder.mark_fault(7);
+    let progress = observer.snapshot();
     CALLBACK.with(|active| active.set(false));
+    assert!(progress.written_frames <= progress.accepted_frames);
     assert_eq!(first, 0);
     assert_eq!(invalid, -1);
     assert_eq!(ALLOCATIONS.with(Cell::get), 0);

@@ -3,6 +3,26 @@
 Updated 2026-10-04. Stage 1 and the independent raw-library part of stage 2 in
 [the plan](PLAN.md) are implemented.
 
+## Task0009 REC-01 / REC-02 software continuation
+
+Operation-correlated Session effects/readiness/completion now fence retired
+workers. Stop during preparation waits for adapter cleanup; duplicate Stop and
+completion cannot issue a second finalize. The additive v2 C observer owns
+independent refcounted atomics and can outlive the consumed v1 recorder. It
+reports accepted versus all-stems-and-journal written frames, unknown durability,
+integrity counters, first host fault, writer fault and finalized outcome. The
+v1 ABI and raw format remain unchanged. Header output-size rejection and
+observer lifetime rules are explicit in [RAW_RECORDER](RAW_RECORDER.md).
+
+The E06 JSON corpus exercises real session behavior, and the direct C ABI runner
+verifies 96 distinguishable exact PCM24 frames per stem. Tests cover concurrent
+observation, retained lifetime, no-write bounds rejection, complete/incomplete/
+error/drop/panic outcomes and allocation-free callback paths. **30 normal tests pass**, along with warning-denied all-target Clippy and the
+release build on exact Rust 1.97.1. Final commands/results are recorded in the
+owning GigPies plan. These synthetic checks
+do not replace the retained hardware evidence below. Shell recording/playback
+remain unavailable until a real standalone adapter is implemented.
+
 ## Independent raw recorder
 
 The [raw recorder library](RAW_RECORDER.md) now writes aligned mono PCM24 WAVs
@@ -14,8 +34,9 @@ Source valid bits are declared separately from PCM24 container width. It creates
 no audio device/client, route, service or monitoring path. The shell's Record
 and Play controls remain unavailable.
 
-Exact rustc 1.97.1 passes formatting, all-target tests, warning-denied Clippy and
-the release build with `CARGO_INCREMENTAL=0`. **23 normal tests pass**: the prior
+At the pre-task0009 raw-library checkpoint, exact rustc 1.97.1 passed formatting,
+all-target tests, warning-denied Clippy and
+the release build with `CARGO_INCREMENTAL=0`. **23 normal tests passed**: the prior
 13 foundation checks plus ten raw engine/recovery/callback checks. New coverage
 includes exact PCM24 extremes and channel order, odd RIFF padding, forward gaps,
 backwards/nonfinite/invalid input, whole-period overflow, startup/empty/drop/

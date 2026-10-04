@@ -52,3 +52,9 @@ are performed there. This project's own instructions authorize local validation.
   stable selection and remembered exact routes when devices disappear.
 
 See [development status](STATUS.md) for delivered behavior and evidence.
+
+## GigPies integration planning — 2026-10-04
+
+[Owning GigPies plan](GIGPIES_IMPLEMENTATION.md) records scoped tasks, contract dependencies,
+validation and launch instructions. This is planned work; existing implementation
+and hardware status above are unchanged.
