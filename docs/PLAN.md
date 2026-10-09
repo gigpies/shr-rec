@@ -55,6 +55,6 @@ See [development status](STATUS.md) for delivered behavior and evidence.
 
 ## GigPies integration planning — 2026-10-04
 
-[Owning GigPies plan](GIGPIES_IMPLEMENTATION.md) records scoped tasks, contract dependencies,
-validation and launch instructions. This is planned work; existing implementation
-and hardware status above are unchanged.
+[Owning GigPies plan](GIGPIES_IMPLEMENTATION.md) owns module-only plans and implementation progress in the same task cards.
+Shared integration work is linked to its GigPies owner; dated evidence above
+retains its original scope.

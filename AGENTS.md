@@ -163,3 +163,13 @@ shutdown behavior. Do not require a launcher SDK, daemon, network API, or a
 shared crate. The launcher owns launching/waiting; the gadget owns its audio,
 state, safe stopping, and terminal restoration. Restore raw mode, cursor,
 mouse reporting, and the alternate screen on normal exit and handled errors.
+
+## GigPies task tracking
+
+Use `docs/GIGPIES_IMPLEMENTATION.md` for GigPies work owned here. Keep each task plan,
+implementation state, acceptance checklist, evidence and next action in the same
+card; update it with the change. Shared integration tasks have one card in
+GigPies, linked from contributor plans. STATUS, maps, handoffs and knowledge notes
+route to task owners or preserve dated evidence; never mirror current task state.
+Archive closed cards once; keep the active queue limited to open work. Reference
+projects do not become GigPies runtime modules merely because code is reused.
