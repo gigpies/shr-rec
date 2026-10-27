@@ -23,13 +23,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Install exact Rust toolchain
         run: |
           rustup toolchain install 1.97.1 --profile minimal --component rustfmt
           rustc +1.97.1 -vV
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Formatting
         run: |
           cargo +1.97.1 fmt --all -- --check
@@ -39,3 +43,17 @@ jobs:
       - name: Normal offline tests
         run: |
           cargo +1.97.1 test --locked --all-targets -- --test-threads=1
+  automation:
+    uses: gigpies/.github/.github/workflows/quality.yml@80d76c2b710d90e55f4f95ecea192c514f471fe6
+  gate:
+    name: Required CI
+    if: ${{ always() }}
+    needs: [check, automation]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require all build and contributor checks
+        env:
+          BUILD_RESULT: ${{ needs.check.result }}
+          AUTOMATION_RESULT: ${{ needs.automation.result }}
+        run: test "$BUILD_RESULT" = success && test "$AUTOMATION_RESULT" = success

@@ -2,7 +2,7 @@
 
 # SHR Rec
 
-**Aligned multitrack recording for GigPies.** The recording library writes a
+**Aligned multitrack recording for GigPies, with a terminal application (TUI) in development.** The recording library writes a
 separate 24-bit WAV for each channel, with take information and recovery support.
 
 [**Current use and setup**](docs/LOCAL_SETUP.md) · [**GigPies guide**](https://github.com/gigpies/gigpies/blob/main/docs/README.md) · [Engineering](docs/ENGINEERING.md)
@@ -25,3 +25,5 @@ Touch PREV/NEXT to select, ARM to toggle and EXIT to leave.
 Keyboard: arrows, Space, `q` or Escape. No audio device opens.
 
 [Setup and configuration](docs/LOCAL_SETUP.md) · [Development status](docs/STATUS.md) · [MIT license](LICENSE)
+
+[Contribute](https://github.com/gigpies/.github/blob/main/CONTRIBUTING.md) · [Report a bug](https://github.com/gigpies/shr-rec/issues/new/choose)
