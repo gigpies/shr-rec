@@ -20,15 +20,19 @@ env:
 
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install exact Rust toolchain
         run: |
-          rustup toolchain install 1.97.1 --profile minimal --component rustfmt
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
           rustc +1.97.1 -vV
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -43,6 +47,10 @@ jobs:
       - name: Normal offline tests
         run: |
           cargo +1.97.1 test --locked --all-targets -- --test-threads=1
+      - name: Clippy and release build
+        run: |
+          cargo +1.97.1 clippy --locked --all-targets -- -D warnings
+          cargo +1.97.1 build --locked --release
   automation:
     uses: gigpies/.github/.github/workflows/quality.yml@80d76c2b710d90e55f4f95ecea192c514f471fe6
   gate:
