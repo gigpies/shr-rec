@@ -52,7 +52,7 @@ dependencies = [
  "libc",
  "mio 0.8.11",
  "parking_lot",
- "signal-hook",
+ "signal-hook 0.3.18",
  "signal-hook-mio",
  "winapi",
 ]
@@ -70,7 +70,7 @@ dependencies = [
  "mio 1.2.4",
  "parking_lot",
  "rustix",
- "signal-hook",
+ "signal-hook 0.3.18",
  "signal-hook-mio",
  "winapi",
 ]
@@ -351,7 +351,7 @@ dependencies = [
  "rtrb",
  "serde",
  "serde_json",
- "signal-hook",
+ "signal-hook 0.4.5",
 ]
 
 [[package]]
@@ -359,6 +359,16 @@ name = "signal-hook"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d881a16cf4426aa584979d30bd82cb33429027e42122b169753d6ef1085ed6e2"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
+name = "signal-hook"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b29ffa27d3d59a049bb328258de100f8012848d1b08d444e08bbc02ac468435e"
 dependencies = [
  "libc",
  "signal-hook-registry",
@@ -373,7 +383,7 @@ dependencies = [
  "libc",
  "mio 0.8.11",
  "mio 1.2.4",
- "signal-hook",
+ "signal-hook 0.3.18",
 ]
 
 [[package]]
