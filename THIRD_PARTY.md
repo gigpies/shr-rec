@@ -27,3 +27,9 @@ startup, whole-period capture and partial-finalization lessons. No source was
 copied. Its copy recovery preserves original evidence instead of adapting SHR's
 in-place repair. rtrb 0.4.0 (MIT OR Apache-2.0) supplies the bounded SPSC queues;
 Cargo.lock pins it without updating the existing dependency graph.
+
+The standalone player and JACK adapter are newly written here. SHR-DAW revision
+`90f0de7b3a0ad6dd00cfe163f4fcdfe67674c1e4` was inspected read-only for its format-1
+manifest, legacy odd-frame WAV behavior and minimal dynamic JACK lifecycle.
+No source or private settings were copied. The system JACK header declarations
+supply the FFI signatures; libjack is loaded only when explicitly requested.

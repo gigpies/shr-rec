@@ -1,7 +1,13 @@
 # Development status
 
-Updated 2026-10-04. Stage 1 and the independent raw-library part of stage 2 in
-[the plan](PLAN.md) are implemented.
+Current standalone work and acceptance live in [the owning plan](PLAN.md#sp-03--task0028-standalone-playback).
+The [operating guide](LOCAL_SETUP.md) describes available playback. Entries below
+are dated evidence; older shell/playback limitations describe their checkpoint.
+
+## 2026-10-04 foundation and raw-library evidence
+
+Stage 1 and the independent raw-library part of stage 2 were implemented at this
+checkpoint.
 
 ## Task0009 REC-01 / REC-02 software continuation
 

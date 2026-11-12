@@ -17,11 +17,13 @@ usable, tested increment; audio acceptance is separate from software evidence.
    based safe recovery. Test distinguishable channels, partial rename retries,
    malformed/symlink inputs, low space, startup/disk/flush failures, limits,
    overflow, xruns, and disconnects before JACK integration.
-3. **Synchronized playback:** validate native and SHR format-1 takes read-only;
-   bounded disk prefetch and common callback transport including seek, EOF,
-   underrun, deliberate damaged-take selection, and rate mismatch rejection.
-   Add exact output assignment and an explicit stereo audition mix with
-   per-stem level/pan/mute and deliberate headroom.
+3. **Synchronized playback (implemented; hardware gate open):** native raw
+   version 1 and SHR format-1 validation/read-only selection, bounded prefetch,
+   common play/pause/stop/seek, EOF/underrun/read/device faults, exact outputs and
+   stereo audition with per-stem level/pan/mute and explicit headroom. The
+   standalone touch workflow is wired to a dynamic no-start JACK adapter.
+   [SP-03](#sp-03--task0028-standalone-playback) owns acceptance and next action;
+   [playback reference](PLAYBACK.md) owns behavior and reproducible commands.
 4. **Complete gadget workflow:** exact JACK attachment with no server startup,
    persistent cancellable source/output setup, take selection, 18 circular LED
    meters, configured ALSA Sequencer input, shared action dispatch, graceful
@@ -58,3 +60,71 @@ See [development status](STATUS.md) for delivered behavior and evidence.
 [Owning GigPies plan](GIGPIES_IMPLEMENTATION.md) owns module-only plans and implementation progress in the same task cards.
 Shared integration work is linked to its GigPies owner; dated evidence above
 retains its original scope.
+
+## SP-03 — Task0028 standalone playback
+
+Owner: Pi4 bounded worker in canonical shr-rec; Pi5 reviews/integrates the
+result. Shared audio-setup/provider work stays in the Task0028 GigPies card.
+No sibling edits, recorder-engine/ABI changes, device execution or hardware
+reservation belong to this standalone package.
+
+Plan and implementation: validate both current take formats; feed one bounded
+off-callback reader into a common timeline; add exact outputs and an explicit
+stereo mix; wire browser, routes, transport, progress, faults and shutdown to the
+40×13 shell; verify the actual adapter with fake JACK and the actual workflow
+with null callbacks; update operating/engineering references; publish a scoped
+commit and immutable peer receipt.
+
+Acceptance checklist:
+
+- [x] Native raw and SHR format-1 discovery/open, channel/metadata validation,
+  meaningful errors, read-only source handling and damaged-take confirmation.
+- [x] Bounded streaming and common play/pause/stop/seek; deterministic whole-period
+  underrun/read faults and exact EOF tail; rate mismatch refusal.
+- [x] Explicit exact output selection; stereo level/pan/mute, fixed 0.5/N gain,
+  unity master, cancellable edits and private route saving.
+- [x] Actual standalone controls/progress/error details at 40×13, common Session
+  transport, failure cleanup, exit/signal ownership and reopen.
+- [x] Synthetic native capture/publication/recovery/player path, distinguishable
+  18/64-channel samples, bounded streaming, no-allocation callback checks,
+  fake-JACK exact graph/startup/fault cleanup and null-device touch workflow.
+- [x] Final normal production, formatting, check, Clippy and release gates.
+- [ ] Pi5 review of the published diff and immutable receipt.
+- [ ] Separately authorized native 18-channel sustained capture/playback,
+  physical routing, storage load, listening and whole-device performance.
+
+Evidence (rpi4, 2026-11-12): Rust 1.97.1
+`8bab26f4f68e0e26f0bb7960be334d5b520ea452`, locked dependencies, one job,
+CARGO_INCREMENTAL=0, canonical target, shared nonblocking build lock held by the
+build parent throughout the sequence:
+
+| Gate | Command | Result |
+|---|---|---|
+| Formatting | `cargo fmt --all -- --check` | PASS |
+| All-target check | `cargo check --locked --all-targets` | PASS |
+| Normal production | `cargo test --locked --all-targets -- --test-threads=1` | 48 passed, 0 failed, 0 ignored |
+| Lint | `cargo clippy --locked --all-targets -- -D warnings` | PASS |
+| Release | `cargo build --locked --release` | PASS (64 s) |
+| Boundary | Release `--help`, `--version`, exported ABI symbols, dynamic libraries | PASS; same ten recorder C exports, no missing libraries |
+
+The final source/test/Cargo/toolchain input digest is
+`3a508941908f2ff9584977643c3c8196e3dc9672de7d2294466953eadba7867c`.
+The first complete run caught a new PTY test's assumption that rendered words
+were contiguous despite cursor-position escapes; the readiness predicate was
+corrected, then all final gates above passed on unchanged production code.
+Focused playback/adapter/recovery/workflow regressions also passed during work.
+Historical/exhaustive, long-soak and physical-device classes were intentionally
+not run. No JACK server was contacted by tests; no hardware/audio/MIDI action,
+network load, service change or actual recording took place.
+
+Synthetic fixtures are reproducible test source, created/removed in temporary
+storage; no rendered audio or duplicate build trees are retained. Normal build
+outputs (about 553 MiB) and the release binary/library remain for review/use.
+The disposable newly generated zk index was removed after closing its handles;
+notes/config/template remain. Exact artifact hashes and publication revision are
+in the immutable Task0028 rpi4 ready-for-review receipt.
+
+Next owner/action: Pi5 reviews the published source diff and receipt, records
+acceptance and integrates the independent playback delivery. Hardware gates
+remain unreserved. Standalone recording, capture meters, ALSA controller input and the full capture identity
+schema remain in stages 2/4; they are not implied by playback completion.

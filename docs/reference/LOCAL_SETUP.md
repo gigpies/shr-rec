@@ -7,8 +7,9 @@ Detailed reference. For everyday use, start with the [operating guide](../LOCAL_
 Build with `cargo build --locked --release`. The exact toolchain is selected by
 `rust-toolchain.toml`; install it with
 `rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy`
-if absent. The tested platform is AArch64 Linux. The first foundation needs no
-JACK/ALSA development packages because no audio adapter is included yet.
+if absent. The tested platform is AArch64 Linux. Playback loads system
+`libjack.so.0` dynamically and needs an existing JACK server when explicitly discovering destinations or starting audio. No JACK
+Rust dependency or JACK/ALSA development package is needed to build.
 
 From the checkout, install a user-local command once:
 
@@ -54,7 +55,8 @@ The foundation has no port discovery, so remembered sources show MISSING.
 There are at most 64 tracks; 18 is the future Pi acceptance target.
 
 This is an initial **configuration** schema, not the future take manifest.
-Stereo groups, output routes and controller mappings are still pending. Arm
+Playback output routes/mix live in separate private `playback.json`; the full
+standalone capture schema and controller mappings remain pending. Arm
 changes in the current shell last only for that process; edit the private file
 while stopped to set startup preferences. Do not track real routes or takes.
 
@@ -66,17 +68,22 @@ There is no launcher SDK, daemon, socket, shared crate or network dependency.
 `--help` and `--version` work without HOME, audio or an interactive terminal.
 Errors exit nonzero and print to stderr after terminal cleanup.
 
-Touch EXIT, `q`, Escape and Ctrl-C return to the caller. SIGTERM, SIGINT and
-SIGHUP request graceful shell exit. The terminal guard restores raw mode,
+Touch EXIT, `q` and Ctrl-C return to the caller. Escape cancels/goes back in
+playback pages and exits from input setup. SIGTERM, SIGINT and SIGHUP request
+graceful exit. Playback first closes its JACK client and joins its disk worker.
+The terminal guard restores raw mode,
 cursor visibility, mouse reporting and alternate screen on normal exit,
 handled errors and unwinding. SIGKILL, power loss and abort cannot run cleanup.
 
 The engine-independent state contract already requires Stop and finalize /
 Cancel during recording, waits for producer/worker completion and keeps a
-damaged result visible before another deliberate Exit. No engine is wired to
-that protocol yet. Before recording is enabled, the signal path must drive its
+damaged result visible before another deliberate Exit. The recording engine is
+not wired to that protocol yet; playback drives common transport and quiescence.
+Before recording is enabled, the signal path must drive its
 quiescence/finalization effects and leave crash-recoverable files; current
-terminal tests establish only shell cleanup.
+terminal tests establish terminal cleanup, while offline playback tests cover
+reader/callback teardown. See [playback](../PLAYBACK.md) for invocation,
+format compatibility, exact routes and failure behavior.
 
 ## Executable naming
 

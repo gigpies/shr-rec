@@ -23,6 +23,22 @@ pub enum Action {
     Confirm,
     Cancel,
     Select(usize),
+    Apply,
+    Details,
+    Takes,
+    Open,
+    Refresh,
+    SeekBack,
+    SeekForward,
+    Outputs,
+    Mode,
+    Assign,
+    Save,
+    Mix,
+    LevelDown,
+    LevelUp,
+    Pan,
+    Mute,
 }
 
 #[derive(Clone, Copy)]
@@ -57,8 +73,8 @@ const NORMAL: [Button; 8] = [
         action: Action::Stop,
     },
     Button {
-        label: "",
-        action: Action::Cancel,
+        label: "TAKES",
+        action: Action::Takes,
     },
     Button {
         label: "EXIT",
@@ -81,6 +97,7 @@ pub struct App {
     pub session: Session,
     pub selected: usize,
     pub status: String,
+    pub playback: crate::playback_ui::PlaybackUi,
 }
 
 impl App {
@@ -89,11 +106,67 @@ impl App {
             config,
             session: Session::default(),
             selected: 0,
-            status: "Audio engine not implemented".into(),
+            status: "Recording not implemented; TAKES to play".into(),
+            playback: crate::playback_ui::PlaybackUi::new(
+                std::path::PathBuf::new(),
+                std::path::PathBuf::new(),
+            ),
         }
     }
 
+    fn synchronize_playback(&mut self) {
+        use crate::playback::State;
+        match self.playback.state() {
+            State::Playing => {
+                if matches!(
+                    self.session.transport(),
+                    Transport::Stopped | Transport::Paused
+                ) {
+                    let _ = self.session.play();
+                }
+            }
+            State::Paused => {
+                if self.session.transport() == Transport::Playing {
+                    let _ = self.session.pause();
+                }
+            }
+            _ => {
+                if matches!(
+                    self.session.transport(),
+                    Transport::Playing | Transport::Paused | Transport::StoppingPlayback
+                ) {
+                    let _ = self.session.playback_stopped();
+                }
+            }
+        }
+    }
+
+    pub fn tick(&mut self) {
+        self.playback.tick();
+        self.synchronize_playback();
+    }
+
+    pub fn shutdown(&mut self) {
+        self.playback.stop();
+        self.synchronize_playback();
+        self.session.request_exit();
+    }
+
     pub fn dispatch(&mut self, action: Action) {
+        if self.playback.active {
+            if action == Action::Exit {
+                self.shutdown();
+            } else {
+                self.playback.dispatch(action);
+                self.synchronize_playback();
+            }
+            return;
+        }
+        if action == Action::Takes && self.session.transport() == Transport::Stopped {
+            self.playback.active = true;
+            self.playback.dispatch(Action::Refresh);
+            return;
+        }
         if self.session.exit_confirmation() {
             match action {
                 Action::Confirm => {
@@ -112,7 +185,11 @@ impl App {
                 self.config.tracks[self.selected].armed ^= true;
                 self.status = "Arm changes last for this run".into();
             }
-            Action::Record | Action::Play => self.status = "Audio engine not implemented".into(),
+            Action::Record => self.status = "Recording not implemented in shell".into(),
+            Action::Play if self.session.transport() == Transport::Stopped => {
+                self.playback.active = true;
+                self.playback.dispatch(Action::Refresh);
+            }
             Action::Stop => {
                 self.session.stop();
             }
@@ -128,6 +205,67 @@ impl App {
     }
 
     pub fn event(&self, event: Event, size: Rect) -> Option<Action> {
+        if self.playback.active {
+            return match event {
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && key.code == KeyCode::Char('c')
+                    {
+                        return Some(Action::Exit);
+                    }
+                    match key.code {
+                        KeyCode::Up => Some(Action::Previous),
+                        KeyCode::Down => Some(Action::Next),
+                        KeyCode::Char('q') => Some(Action::Exit),
+                        KeyCode::Esc => Some(Action::Cancel),
+                        KeyCode::Enter => Some(match self.playback.page {
+                            crate::playback_ui::Page::Takes => Action::Open,
+                            crate::playback_ui::Page::Damaged => Action::Confirm,
+                            _ => Action::Play,
+                        }),
+                        KeyCode::Char('p' | ' ') => Some(Action::Play),
+                        KeyCode::Char('e') => Some(Action::Details),
+                        KeyCode::Char('s') => Some(Action::Stop),
+                        KeyCode::Left => Some(Action::SeekBack),
+                        KeyCode::Right => Some(Action::SeekForward),
+                        KeyCode::Char('1'..='8') => {
+                            let KeyCode::Char(c) = key.code else {
+                                unreachable!()
+                            };
+                            let button = self.playback.buttons()[c as usize - '1' as usize];
+                            (!button.label.is_empty()).then_some(button.action)
+                        }
+                        _ => None,
+                    }
+                }
+                Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
+                    if size.width < 40 || size.height < 13 {
+                        return (mouse.row == size.height.saturating_sub(1))
+                            .then_some(Action::Exit);
+                    }
+                    if mouse.column >= 40 {
+                        return None;
+                    }
+                    if mouse.row == 12 || (mouse.row == 0 && self.playback.details) {
+                        return Some(Action::Details);
+                    }
+                    if (10..12).contains(&mouse.row) {
+                        let b = self.playback.buttons()
+                            [usize::from((mouse.row - 10) * 4 + mouse.column / 10)];
+                        return (!b.label.is_empty()).then_some(b.action);
+                    }
+                    if self.playback.page == crate::playback_ui::Page::Takes
+                        && (2..7).contains(&mouse.row)
+                    {
+                        return Some(Action::Select(
+                            self.playback.first() + usize::from(mouse.row - 2),
+                        ));
+                    }
+                    None
+                }
+                _ => None,
+            };
+        }
         match event {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
                 if self.session.exit_confirmation() {
@@ -191,6 +329,10 @@ impl App {
                     Rect::new(0, size.height - 1, size.width, 1),
                 );
             }
+            return;
+        }
+        if self.playback.active {
+            self.playback.draw(frame);
             return;
         }
         let build = if cfg!(debug_assertions) { "DEV" } else { "REL" };

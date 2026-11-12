@@ -15,7 +15,7 @@ use std::{
     time::Duration,
 };
 
-const HELP: &str = "shr-rec — standalone multichannel recorder/player (foundation)\n\nUsage: shr-rec [--data-root PATH] [--init-config]\n       shr-rec --help | --version\n\n--data-root PATH  Private configuration and future takes\n--init-config     Create default config.json without replacing existing files\n\nRoot: --data-root, then REC_DATA_ROOT, then XDG_DATA_HOME/rec,\n      then HOME/.local/share/rec.\nTouch: PREV/NEXT, ARM, STOP, EXIT. Keyboard: arrows, Space, s, q/Esc.\nAudio recording/playback and MIDI are not implemented in this foundation.\n";
+const HELP: &str = "shr-rec — standalone multichannel take player / recorder shell\n\nUsage: shr-rec [--data-root PATH] [--takes-root PATH] [--open TAKE]\n       shr-rec [--data-root PATH] --init-config\n       shr-rec --help | --version\n\n--data-root PATH  Private configuration (REC_DATA_ROOT also supported)\n--takes-root PATH Read-only take library (default DATA_ROOT/takes)\n--open TAKE       Open one native or SHR format-1 take directory\n--init-config     Create config.json without replacing existing files\n\nRoot: --data-root, REC_DATA_ROOT, XDG_DATA_HOME/rec, HOME/.local/share/rec.\nTouch TAKES, OPEN, OUTPUTS; choose exact or stereo routes, then PLAY.\nKeyboard: arrows, Enter, p/Space, s, q; 1–8 activate visible controls.\nJACK attaches only on explicit output discovery/play; never starts a server.\nRecording and MIDI in the standalone shell remain unimplemented.\n";
 
 fn main() -> std::process::ExitCode {
     match run() {
@@ -30,6 +30,8 @@ fn main() -> std::process::ExitCode {
 fn run() -> Result<()> {
     let mut root = None;
     let mut init = false;
+    let mut library = None;
+    let mut open = None;
     let mut args = env::args_os().skip(1);
     while let Some(arg) = args.next() {
         match arg.to_str() {
@@ -48,6 +50,24 @@ fn run() -> Result<()> {
                 }
                 if root.replace(PathBuf::from(value)).is_some() {
                     bail!("--data-root provided twice");
+                }
+            }
+            Some("--takes-root") => {
+                let value = args.next().context("--takes-root requires a path")?;
+                if value.is_empty() {
+                    bail!("--takes-root requires a nonempty path");
+                }
+                if library.replace(PathBuf::from(value)).is_some() {
+                    bail!("--takes-root provided twice");
+                }
+            }
+            Some("--open") => {
+                let value = args.next().context("--open requires a take directory")?;
+                if value.is_empty() {
+                    bail!("--open requires a nonempty take directory");
+                }
+                if open.replace(PathBuf::from(value)).is_some() {
+                    bail!("--open provided twice");
                 }
             }
             Some("--init-config") => init = true,
@@ -69,6 +89,14 @@ fn run() -> Result<()> {
         bail!("interactive terminal required; use --help");
     }
     let mut app = App::new(config);
+    app.playback = shr_rec::playback_ui::PlaybackUi::new(
+        root.clone(),
+        library.unwrap_or_else(|| root.join("takes")),
+    );
+    if let Some(path) = open {
+        app.playback.active = true;
+        app.playback.open(&path)?;
+    }
     let shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     for signal in [
         signal_hook::consts::SIGTERM,
@@ -82,13 +110,12 @@ fn run() -> Result<()> {
     terminal.clear()?;
     while app.session.transport() != Transport::Exited {
         if shutdown.load(std::sync::atomic::Ordering::Relaxed) {
-            // This milestone has no engine resources. Future adapters must drive
-            // the quiescence/finalization protocol here before returning.
-            app.session.request_exit();
+            app.shutdown();
             if app.session.transport() == Transport::Exited {
                 break;
             }
         }
+        app.tick();
         terminal.draw(|frame| app.draw(frame))?;
         if event::poll(Duration::from_millis(100))?
             && let Some(action) = app.event(event::read()?, terminal.size()?)

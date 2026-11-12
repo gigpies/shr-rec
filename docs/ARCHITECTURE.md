@@ -14,7 +14,7 @@ Stopped -> Playing <-> Paused -> StoppingPlayback -> Stopped
 Stopped -> Exited
 ```
 
-Effects tell a future engine adapter what to do. Recording readiness follows
+Effects define the engine adapter's lifecycle. Recording readiness follows
 worker startup, and completion follows producer quiescence and worker join.
 Late readiness after stop/failure is rejected. Each capture has a monotonically
 increasing operation ID carried by preparation/finalization effects and worker
@@ -28,15 +28,17 @@ Only a complete retained take permits an automatic return after finalization;
 an incomplete result remains Stopped with its path and detail retained.
 Playback Exit waits for a separate quiescence acknowledgment.
 
-`ui` holds stable selection and one shared action table for touch labels and
-hit targets. The current executable creates no engine, so Record/Play remain
-unavailable and no synthetic recording state is presented as real capture.
-The session protocol's active states are exercised in tests only. Wiring its
-effects and live status to engine ownership is required before enabling audio.
+`ui` holds stable selection and shared action tables for touch labels and hit
+targets. `playback_ui` drives the take browser, cancellable exact output/stereo
+mix drafts, private route saving and transport. Session follows actual playback
+state; recording remains unavailable rather than presenting simulated capture.
+An injectable device boundary runs the same workflow against real prefetch/null
+callbacks in offline tests.
 
-`main` handles ordinary CLI arguments, private-root selection and RAII terminal
-restoration. It owns no worker, audio client or MIDI port in this milestone.
-Signal handlers set a flag; the event loop returns through terminal cleanup.
+`main` handles ordinary CLI arguments, private-root/library selection and RAII
+terminal restoration. Playback opens JACK only on explicit discovery/start.
+Signal handlers set a flag; the event loop quiesces playback and returns through
+terminal cleanup. Error unwinding also drops the playback owner.
 
 ## Independent raw recording boundary
 
@@ -52,7 +54,7 @@ descriptors and copies common frames to a new destination, preserving originals.
 
 The raw library is independent of the existing shell session controller.
 It neither enables Record in the UI nor claims the future full standalone take
-schema, source-route persistence or playback. GigPies loads the cdylib through
+schema or source-route persistence. GigPies loads the cdylib through
 versioned symbols; there are no sibling path dependencies.
 
 ## Remaining standalone boundaries
@@ -70,13 +72,17 @@ path handling must protect against symlink escapes and partial rename retries.
 The raw host format/recovery above is implemented; a CLI recovery command and the
 full standalone take format remain unimplemented.
 
-Playback: bounded interleaved prefetch from validated mono stems; one common
-callback cursor with coordinated pause, seek/reprime, EOF and underrun. No
-full-take loading, implicit resampling or input-number-to-output inference.
-SHR format-1 support must be read-only and tested explicitly. The native take
-schema remains to be defined; the shell does not yet open SHR takes.
+Playback is implemented separately from the raw C ABI: `take` validates native
+raw version 1 and SHR format-1 sources read-only; `playback` provides bounded
+interleaved disk prefetch, off-thread routing/mixing and one callback cursor.
+`jack_playback` dynamically attaches with no-start-server behavior and closes the
+client before releasing callback storage. UI reads only shared atomics and
+immutable routing snapshots. Seek quiesces and rebuilds every stem together.
+See [playback](PLAYBACK.md) for precise bounds, format checks, headroom, faults,
+shutdown and reproducible tests. Native 18-channel sustained operation remains
+a hardware gate; the 64-channel ceiling is an architectural bound.
 
 JACK: attach with no-start-server behavior, own only exact app connections,
 and retain an operational terminal when audio is absent. ALSA Sequencer input
 must feed the same action dispatcher through a bounded queue; MIDI transmission
-and profile learning are outside this first foundation.
+and profile learning remain deferred.
