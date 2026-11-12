@@ -166,7 +166,7 @@ Acceptance checklist:
 - [x] Exclusive Session ownership, exit cancel/finalize, signal-style shutdown,
   error/drop cleanup, retry and retired-observer regression coverage.
 - [x] Final normal production, formatting, check, Clippy and release gates.
-- [ ] Pi5 independent review and acceptance of the committed delivery.
+- [x] Pi5 independent diff review and software acceptance of `24ff3ad6579b052d4faaffca910a819944330089`; all 58 normal tests independently rerun on Pi4 after ownership release.
 - [ ] Separately authorized sustained native 18-channel capture/playback,
   physical routing/listening, storage load and device-performance acceptance.
 
@@ -207,8 +207,11 @@ Successful synthetic fixtures self-clean. Normal target output is about 590 MiB;
 release executable/library and reproducible source/tests are retained. No scratch
 runner, fixture audio, duplicate workspace or generated evidence inventory remains.
 
-Next owner/action: Pi5 independently reviews the published diff and immutable
-Task0029 rpi4 ready-for-review receipt, records acceptance and performs final
-thirteen-repository synchronization. That receipt carries exact source revision,
-input digest and release artifact hashes. REC source/build ownership is released
-at handoff; all physical gates remain unreserved and unperformed.
+Pi5 acceptance (November 12): actual source diff and receipt reviewed; callback
+ownership, startup, durable completion, recovery and Session exclusivity inspected.
+The coordinator independently reran all 58 normal tests on Pi4 at the published
+implementation above. All passed. CI passed on x86_64/ARM including Required CI.
+This acceptance update changes documentation only and reuses those unchanged
+source/test/lock/toolchain inputs. The Task0029 exchange ledger owns final exact
+revision/hash verification and thirteen-repository synchronization. All physical
+gates remain unreserved and unperformed.
