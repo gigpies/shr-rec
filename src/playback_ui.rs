@@ -95,6 +95,9 @@ impl PlaybackUi {
             shared: None,
         }
     }
+    pub fn use_library(&mut self, library: PathBuf) {
+        self.library = library;
+    }
     pub fn refresh(&mut self) -> Result<()> {
         let previous = self.entries.get(self.selected).map(|e| e.path.clone());
         self.entries = take::discover(&self.library)?;
@@ -505,7 +508,7 @@ impl PlaybackUi {
                 ("NEXT", Action::Next),
                 ("OPEN", Action::Open),
                 ("REFRESH", Action::Refresh),
-                ("", Action::Cancel),
+                ("RECOVER", Action::Recover),
                 ("", Action::Cancel),
                 ("INPUTS", Action::Cancel),
                 ("EXIT", Action::Exit),

@@ -207,6 +207,36 @@ fn text(v: &Value, key: &str) -> Result<String> {
     Ok(s.into())
 }
 
+pub(crate) fn capture_identity(
+    directory: &File,
+    count: usize,
+) -> Result<Option<crate::capture::Identity>> {
+    if optional_member(directory, "capture.json")?.is_none() {
+        return Ok(None);
+    }
+    let identity: crate::capture::Identity =
+        serde_json::from_value(json(directory, "capture.json")?)?;
+    ensure!(
+        identity.version == 1
+            && identity.tracks.len() == count
+            && identity.source_uuids.len() == count,
+        "invalid capture identities"
+    );
+    crate::config::Config {
+        format_version: 1,
+        tracks: identity.tracks.clone(),
+    }
+    .validate()?;
+    ensure!(
+        identity
+            .tracks
+            .iter()
+            .all(|t| t.armed && t.preferred_source.is_some()),
+        "invalid captured source assignment"
+    );
+    Ok(Some(identity))
+}
+
 /// Only aligned, finalized PCM24 mono files can be activated. An incomplete
 /// manifest with valid finalized stems can be deliberately auditioned; broken
 /// headers/partial stems require recovery first, never implicit truncation.
@@ -285,10 +315,17 @@ impl Take {
                 .iter()
                 .any(|key| result[*key].as_u64() != Some(0))
                 || !result["error"].is_null();
+            let identity = capture_identity(&directory, count as usize)?;
             for i in 1..=count {
                 specs.push((
-                    format!("channel-{i:03}"),
-                    format!("Channel {i}"),
+                    identity.as_ref().map_or_else(
+                        || format!("channel-{i:03}"),
+                        |m| m.tracks[i as usize - 1].id.clone(),
+                    ),
+                    identity.as_ref().map_or_else(
+                        || format!("Channel {i}"),
+                        |m| m.tracks[i as usize - 1].label.clone(),
+                    ),
                     format!("channel-{i:03}.wav"),
                     integer(&result, "frames")?,
                     true,

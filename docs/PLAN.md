@@ -7,11 +7,12 @@ usable, tested increment; audio acceptance is separate from software evidence.
    root and configuration, exact route resolution, exclusive transport state
    and asynchronous shutdown contract, 40×13 touch/keyboard shell, CLI and
    terminal restoration. No live audio is enabled in this stage.
-2. **Recording and recovery (raw host library implemented):** the independent
+2. **Recording and recovery (standalone software implemented; hardware gate open):** the independent
    [raw library](RAW_RECORDER.md) provides bounded queues, PCM24 stems, readiness,
    source-frame journaling, integrity and evidence-preserving copy recovery.
-   Standalone routes/stereo identities, full take schema and shell/device wiring
-   remain. Adapt only raw capture pieces from SHR, with
+   [SP-04](#sp-04--task0029-standalone-capture) owns standalone exact capture,
+   private setup, optional identity metadata, shell/device lifecycle and recovery.
+   Stereo capture grouping and stopped-input meters remain. Adapt only raw capture pieces from SHR, with
    provenance; bounded interleaved SPSC, startup handshake, one worker, mono
    24-bit WAVs, native versioned manifest, no-replace publication, descriptor
    based safe recovery. Test distinguishable channels, partial rename retries,
@@ -89,7 +90,9 @@ Acceptance checklist:
   18/64-channel samples, bounded streaming, no-allocation callback checks,
   fake-JACK exact graph/startup/fault cleanup and null-device touch workflow.
 - [x] Final normal production, formatting, check, Clippy and release gates.
-- [ ] Pi5 review of the published diff and immutable receipt.
+- [x] Pi5 review of the published diff and immutable receipt (software accepted
+  at dd5e2bab501580e886788c8ac8ab59b6989b516e; 48 normal tests independently
+  rerun; private exchange `nodes/rpi5/0028-rec-accepted-20261112T141715Z-dd5e2ba.md`).
 - [ ] Separately authorized native 18-channel sustained capture/playback,
   physical routing, storage load, listening and whole-device performance.
 
@@ -124,7 +127,88 @@ The disposable newly generated zk index was removed after closing its handles;
 notes/config/template remain. Exact artifact hashes and publication revision are
 in the immutable Task0028 rpi4 ready-for-review receipt.
 
-Next owner/action: Pi5 reviews the published source diff and receipt, records
-acceptance and integrates the independent playback delivery. Hardware gates
-remain unreserved. Standalone recording, capture meters, ALSA controller input and the full capture identity
-schema remain in stages 2/4; they are not implied by playback completion.
+Next owner/action: Pi5 accepted this playback delivery for software on November 12.
+Hardware gates remain unreserved. SP-04 owns the subsequent standalone capture
+package; stopped-input meters, stereo capture groups and ALSA controller input
+remain in stages 2/4.
+
+
+## SP-04 — Task0029 standalone capture
+
+Owner: the one authorized Pi4 worker, canonical main at the assigned
+`dd5e2bab501580e886788c8ac8ab59b6989b516e` base; Pi5 reviews the actual diff and
+performs final multi-repository synchronization. Source scope is REC only.
+[Capture reference](CAPTURE.md) owns lifecycle/format details and commands;
+[operating guide](LOCAL_SETUP.md) owns the complete touch path. Shared GP-GATE
+integration stays in GigPies; there is no new GigPies runtime capture ABI.
+
+Plan and implementation: preserve the existing host raw writer and ABI; add
+no-start exact JACK capture and bounded interleaving; prepare the writer before
+attachment/enablement; wire private source/destination setup and Session ownership;
+quiesce before consuming the writer on a finalization worker; expose authoritative
+completion, progress/faults and evidence-preserving deliberate copy recovery; test
+the actual adapter with fake JACK and the complete UI with null boundaries.
+
+Acceptance checklist:
+
+- [x] Exact supported input names/UUIDs/rate inspection, cancellable source and
+  destination selection, arm/status/limits, private SAVE, no implicit routes.
+- [x] Startup writer readiness and successful attachment precede capture;
+  synchronized raw stems, bounded preallocation and callback allocation guards.
+- [x] Progress/limits, startup/refused/replaced-port, queue, rate, xrun/device and
+  writer/publication failures remain explicit and incomplete where applicable.
+- [x] Stop quiesces the producer before asynchronous drain/sync/publication;
+  completion is authoritative, repeated stop does not create another finalizer.
+- [x] Complete touch setup → capture → finalize → discover → existing player
+  routes/prepare/render, stop/reopen another take, interrupted-copy recovery.
+- [x] Deliberate recovery validates all stems/optional identities before creating
+  output, preserves original evidence, and remains visibly recovered-incomplete.
+- [x] Exclusive Session ownership, exit cancel/finalize, signal-style shutdown,
+  error/drop cleanup, retry and retired-observer regression coverage.
+- [x] Final normal production, formatting, check, Clippy and release gates.
+- [ ] Pi5 independent review and acceptance of the committed delivery.
+- [ ] Separately authorized sustained native 18-channel capture/playback,
+  physical routing/listening, storage load and device-performance acceptance.
+
+Validation evidence and final source revision are recorded at closeout below.
+No hardware/resource reservation, server/device action, MIDI or service changes
+are authorized by this software delivery. Stopped-input meters, stereo capture
+grouping and MIDI/controller expansion remain outside Task0029.
+
+
+Validation (rpi4, 2026-11-12): exact Rust 1.97.1
+`8bab26f4f68e0e26f0bb7960be334d5b520ea452`, locked dependencies, one job,
+CARGO_INCREMENTAL=0, canonical target and the node’s parent-held shared build lock.
+
+| Gate | Command | Result |
+|---|---|---|
+| Focused capture/adapter | `cargo test --locked --test capture_ui --lib -- --test-threads=1` | 23 passed |
+| Normal production | `cargo test --locked --all-targets -- --test-threads=1` | 58 passed, 0 failed, 0 ignored |
+| Formatting / check | `cargo fmt --all -- --check`; `cargo check --locked --all-targets` | PASS |
+| Lint | `cargo clippy --locked --all-targets -- -D warnings` | PASS |
+| Release | `cargo build --locked --release` | PASS (73 s) |
+| Boundary | Release `--help`, `--version`, `nm -D`, `ldd` | PASS; same ten C exports; no missing libraries |
+
+Session, header, Cargo.lock/Cargo.toml and toolchain inputs are unchanged. The raw
+engine diff adds only an internal optional-metadata recovery hook; its public
+raw/C recovery supplies no metadata and retains the existing behavior. Prior Pi5
+playback acceptance is recorded in SP-03; the unchanged playback regressions pass.
+A timing-dependent attempt to provoke queue overflow was replaced by deterministic
+refused-push coverage; raw stopped-consumer overflow coverage remains normal.
+The 18-channel touch regression explicitly selects exact output mode before
+assigning outputs, preserving the existing deliberate playback workflow.
+
+Historical/exhaustive, long-soak and physical-device test classes were not run.
+No actual JACK server was contacted; no physical audio/MIDI, storage/load, service
+or device action occurred. Removed two failed-test scratch trees and the newly
+created disposable zk index after checking processes/open files: 10,760,192 allocated
+bytes reclaimed (10,354,688 in tmpfs, 405,504 on disk; 10,365,698 apparent bytes).
+Successful synthetic fixtures self-clean. Normal target output is about 590 MiB;
+release executable/library and reproducible source/tests are retained. No scratch
+runner, fixture audio, duplicate workspace or generated evidence inventory remains.
+
+Next owner/action: Pi5 independently reviews the published diff and immutable
+Task0029 rpi4 ready-for-review receipt, records acceptance and performs final
+thirteen-repository synchronization. That receipt carries exact source revision,
+input digest and release artifact hashes. REC source/build ownership is released
+at handoff; all physical gates remain unreserved and unperformed.

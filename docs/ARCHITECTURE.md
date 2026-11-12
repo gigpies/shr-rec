@@ -31,14 +31,16 @@ Playback Exit waits for a separate quiescence acknowledgment.
 `ui` holds stable selection and shared action tables for touch labels and hit
 targets. `playback_ui` drives the take browser, cancellable exact output/stereo
 mix drafts, private route saving and transport. Session follows actual playback
-state; recording remains unavailable rather than presenting simulated capture.
+state. `capture_ui` provides private source/destination setup and deliberate
+recovery; `capture` drives correlated preparation/attachment/finalization.
 An injectable device boundary runs the same workflow against real prefetch/null
 callbacks in offline tests.
 
 `main` handles ordinary CLI arguments, private-root/library selection and RAII
-terminal restoration. Playback opens JACK only on explicit discovery/start.
-Signal handlers set a flag; the event loop quiesces playback and returns through
-terminal cleanup. Error unwinding also drops the playback owner.
+terminal restoration. Capture/playback open JACK only on explicit discovery/start.
+Signal handlers set a flag; the event loop quiesces producers, waits for writer
+completion and returns through terminal cleanup. Terminal read/draw errors drive
+the same shutdown boundary; owner Drop is an incomplete-evidence fallback.
 
 ## Independent raw recording boundary
 
@@ -52,25 +54,29 @@ An immutable incomplete manifest precedes capture; errors never count as a
 successful take. Recovery validates every source stem, holds directory-relative
 descriptors and copies common frames to a new destination, preserving originals.
 
-The raw library is independent of the existing shell session controller.
-It neither enables Record in the UI nor claims the future full standalone take
-schema or source-route persistence. GigPies loads the cdylib through
-versioned symbols; there are no sibling path dependencies.
+The raw library stays host-fed and owns no device. The standalone adapter uses
+it without changing the C ABI, host recovery behavior or native raw v1 manifest.
+GigPies loads the cdylib through versioned symbols; there are no sibling path
+dependencies.
 
-## Remaining standalone boundaries
+## Standalone capture and playback
 
-Capture: prepare routes, files, buffers and callback storage off-thread. One
-callback exclusively owns mutable capture state and pushes whole interleaved
-periods to an SPSC ring; an ordinary worker writes every mono stem. Separate
-atomics/snapshots carry meters and faults. No callback allocation, deallocation,
-locks, I/O, formatting, logging, spawning or waiting.
+Capture prepares files, buffers and identity metadata on a worker before JACK
+attachment. A disabled callback owns the producer inside stable storage while
+all exact source-name/UUID edges connect. Session readiness then enables capture.
+`jack_playback::capture` reuses the existing dynamic JACK boundary, with its own
+client and no playback outputs. One callback pushes whole interleaved periods;
+separate atomic snapshots carry peaks and faults. Stop deactivates/closes the
+client before a worker drains, synchronizes and publishes the take. A completed
+result alone retires Session's capture operation.
 
-Persistence: native versioned manifest with actual/preferred identity, stereo
-groups, common frames and integrity counters. Temporary takes and no-replace
-publication; validate every stem before any recovery mutation. Descriptor-based
-path handling must protect against symlink escapes and partial rename retries.
-The raw host format/recovery above is implemented; a CLI recovery command and the
-full standalone take format remain unimplemented.
+Persistence uses raw native v1 plus an optional validated capture identity
+sidecar. Public host recovery remains unchanged; standalone copy recovery also
+preserves that sidecar under the source directory/lock validation boundary.
+Original partial stems and timelines remain evidence. See [capture](CAPTURE.md)
+for limits, private configuration, exact replacement policy, completion/error
+semantics and reproducible validation. Stereo capture grouping, stopped-input
+meters and controller input remain separate work.
 
 Playback is implemented separately from the raw C ABI: `take` validates native
 raw version 1 and SHR format-1 sources read-only; `playback` provides bounded

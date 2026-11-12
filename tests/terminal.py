@@ -21,7 +21,7 @@ for action in (b"q", b"\x1b[<0;36;12M", signal.SIGTERM, signal.SIGINT, signal.SI
             try:
                 output = b""
                 deadline = time.monotonic() + 5
-                while b"implemented" not in output:
+                while b"SETUP" not in output:
                     assert time.monotonic() < deadline, repr(output)
                     if select.select([master], [], [], 0.1)[0]:
                         output += os.read(master, 65536)

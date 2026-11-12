@@ -17,7 +17,8 @@ Complete integrated operator operation is shared GP-REC; keep its plan/progress 
 GigPies after checking which host actions already exist. A new provider task here
 requires a concrete missing writer/observer behavior, not the standalone shell gap.
 Storage/power-loss and sustained physical capture contribute to GP-H1/H3.
-Standalone recorder UI, take format and synchronized player belong to [PLAN](PLAN.md)
+Task0029 standalone capture is owned by [SP-04](PLAN.md#sp-04--task0029-standalone-capture);
+its adapter preserves the current host ABI. Standalone UI, take format and synchronized player belong to [PLAN](PLAN.md)
 and are not GigPies runtime integration requirements.
 
 ## Tracking and verification

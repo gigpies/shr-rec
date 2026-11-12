@@ -1,7 +1,9 @@
 # Playback ownership and format compatibility
 
 The standalone player deliberately uses the existing native raw version-1
-format rather than inventing a second take format while capture UI is pending.
+format rather than inventing a second take format for standalone capture.
+Standalone capture adds optional validated channel identity metadata; its raw
+manifest/stems/result and the host ABI stay compatible.
 The immutable initial native session manifest always says incomplete; the final
 result and any failure marker determine playback integrity. Copy recovery emits
 recovered-incomplete, which requires deliberate selection.

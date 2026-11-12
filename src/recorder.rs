@@ -696,6 +696,16 @@ pub unsafe extern "C" fn shr_rec_v2_observer_snapshot(
 /// descriptor-held and never repaired, truncated, renamed or overwritten.
 /// This native-v1 recovery deliberately never labels a crash take complete.
 pub fn recover(source: &Path, destination: &Path) -> Result<Report> {
+    recover_with_metadata(source, destination, |_, _| Ok(None))
+}
+
+/// Standalone-only metadata hook. The public raw/ABI path supplies no metadata;
+/// every source stem and optional metadata validate before destination creation.
+pub(crate) fn recover_with_metadata(
+    source: &Path,
+    destination: &Path,
+    metadata: impl FnOnce(&File, u32) -> Result<Option<Vec<u8>>>,
+) -> Result<Report> {
     let directory = open_directory(source)?;
     lock_directory(&directory)?;
     let mut manifest_file = child(&directory, "session.json", false)?;
@@ -775,7 +785,13 @@ pub fn recover(source: &Path, destination: &Path) -> Result<Report> {
         inputs.push(file);
     }
     // All source stems validated before destination creation; originals retained.
+    let metadata = metadata(&directory, manifest.config.channels)?;
     let mut output = TakeFiles::create(destination, &manifest.config)?;
+    if let Some(bytes) = metadata {
+        let mut file = child(&output.directory, "capture.json", true)?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+    }
     for (input, stem) in inputs.iter_mut().zip(&mut output.stems) {
         let copied = std::io::copy(&mut input.take(frames * 3), stem)?;
         ensure!(copied == frames * 3, "source changed during recovery");

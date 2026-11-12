@@ -8,3 +8,6 @@ pub mod jack_playback;
 pub mod playback;
 pub mod playback_ui;
 pub mod take;
+
+pub mod capture;
+pub mod capture_ui;

@@ -5,8 +5,8 @@ Rust library and Linux C ABI with `CARGO_INCREMENTAL=0 cargo build --locked
 --release`. The shared library is `target/release/libshr_rec.so`; the versioned
 declarations are in [include/shr_rec.h](../include/shr_rec.h). This library opens
 no audio device. The host supplies normalized f64 samples and owns device access,
-the source-frame clock, exact source labels and producer shutdown. The terminal
-shell remains disconnected from recording/playback.
+the source-frame clock, exact source labels and producer shutdown. The [standalone capture adapter](CAPTURE.md) owns its separate JACK/UI lifecycle;
+the raw host ABI and native manifest remain unchanged.
 
 ## Lifecycle and callback contract
 
@@ -56,8 +56,8 @@ Readiness and completion carry that same ID. Stop during preparation emits one
 any producer and cleaned up/joined the preparing writer. Late readiness, retired
 completion and duplicate completion are rejected. Repeated Stop emits no work;
 Start remains refused during preparation/finalization. The adapter must consume
-one raw handle with one finish after producer quiescence. This protocol does not
-connect the shell to an audio adapter.
+one raw handle with one finish after producer quiescence. The standalone adapter now drives these effects; GigPies retains its own host
+lifecycle.
 
 The additive `shr_rec_v2_observer_*` symbols preserve every v1 signature and raw
 format. Create an observer **off callback while the producer is quiesced**, then

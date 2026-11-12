@@ -1,5 +1,5 @@
 use crate::{
-    config::{Config, Resolution},
+    config::Config,
     session::{Session, Transport},
 };
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
@@ -39,6 +39,9 @@ pub enum Action {
     LevelUp,
     Pan,
     Mute,
+    Inputs,
+    Destination,
+    Recover,
 }
 
 #[derive(Clone, Copy)]
@@ -47,40 +50,6 @@ pub struct Button {
     pub action: Action,
 }
 
-const NORMAL: [Button; 8] = [
-    Button {
-        label: "PREV",
-        action: Action::Previous,
-    },
-    Button {
-        label: "NEXT",
-        action: Action::Next,
-    },
-    Button {
-        label: "ARM",
-        action: Action::Arm,
-    },
-    Button {
-        label: "RECORD",
-        action: Action::Record,
-    },
-    Button {
-        label: "PLAY",
-        action: Action::Play,
-    },
-    Button {
-        label: "STOP",
-        action: Action::Stop,
-    },
-    Button {
-        label: "TAKES",
-        action: Action::Takes,
-    },
-    Button {
-        label: "EXIT",
-        action: Action::Exit,
-    },
-];
 const CONFIRM: [Button; 2] = [
     Button {
         label: "STOP AND FINALIZE",
@@ -98,6 +67,8 @@ pub struct App {
     pub selected: usize,
     pub status: String,
     pub playback: crate::playback_ui::PlaybackUi,
+    pub capture: crate::capture::Capture,
+    pub capture_view: crate::capture_ui::View,
 }
 
 impl App {
@@ -106,7 +77,9 @@ impl App {
             config,
             session: Session::default(),
             selected: 0,
-            status: "Recording not implemented; TAKES to play".into(),
+            status: "SETUP inputs or TAKES for playback".into(),
+            capture: crate::capture::Capture::new(std::path::PathBuf::new()),
+            capture_view: crate::capture_ui::View::default(),
             playback: crate::playback_ui::PlaybackUi::new(
                 std::path::PathBuf::new(),
                 std::path::PathBuf::new(),
@@ -142,6 +115,11 @@ impl App {
     }
 
     pub fn tick(&mut self) {
+        let was_busy = self.capture.busy();
+        self.capture.tick(&mut self.session);
+        if was_busy {
+            self.status = self.capture.status.clone();
+        }
         self.playback.tick();
         self.synchronize_playback();
     }
@@ -150,11 +128,23 @@ impl App {
         self.playback.stop();
         self.synchronize_playback();
         self.session.request_exit();
+        if self.session.exit_confirmation() {
+            self.session.confirm_exit();
+        }
+        if self.capture.busy() {
+            self.capture.stop(&mut self.session);
+        }
     }
 
     pub fn dispatch(&mut self, action: Action) {
         if self.playback.active {
-            if action == Action::Exit {
+            if action == Action::Recover && self.session.transport() == Transport::Stopped {
+                if let Some(entry) = self.playback.entries.get(self.playback.selected) {
+                    self.capture_view.recovery = Some(entry.path.clone());
+                    self.capture_view.page = crate::capture_ui::Page::Recovery;
+                    self.playback.active = false;
+                }
+            } else if action == Action::Exit {
                 self.shutdown();
             } else {
                 self.playback.dispatch(action);
@@ -163,6 +153,9 @@ impl App {
             return;
         }
         if action == Action::Takes && self.session.transport() == Transport::Stopped {
+            if !self.capture.destination.as_os_str().is_empty() {
+                self.playback.use_library(self.capture.destination.clone());
+            }
             self.playback.active = true;
             self.playback.dispatch(Action::Refresh);
             return;
@@ -171,11 +164,62 @@ impl App {
             match action {
                 Action::Confirm => {
                     self.session.confirm_exit();
+                    self.capture.stop(&mut self.session);
                 }
                 Action::Cancel => self.session.cancel_exit(),
                 _ => {}
             }
             return;
+        }
+        if self.capture_view.page == crate::capture_ui::Page::Recovery {
+            match action {
+                Action::Confirm => {
+                    if let Some(path) = self.capture_view.recovery.take() {
+                        if let Err(e) = self.capture.recover(path, &mut self.session) {
+                            self.status = format!("{e:#}");
+                        } else {
+                            self.status = self.capture.status.clone();
+                        }
+                    }
+                    self.capture_view.page = crate::capture_ui::Page::Details;
+                }
+                Action::Cancel => {
+                    self.capture_view.page = crate::capture_ui::Page::Inputs;
+                    self.playback.active = true;
+                }
+                Action::Exit => {
+                    self.session.request_exit();
+                }
+                _ => {}
+            }
+            return;
+        }
+        if action == Action::Inputs && self.session.transport() == Transport::Stopped {
+            self.capture_view.page = if self.capture_view.page == crate::capture_ui::Page::Setup {
+                crate::capture_ui::Page::Inputs
+            } else {
+                crate::capture_ui::Page::Setup
+            };
+            return;
+        }
+        if action == Action::Details
+            || self.capture_view.page == crate::capture_ui::Page::Details
+            || !self.capture.busy()
+        {
+            match self.capture_view.edit(
+                action,
+                &mut self.capture,
+                &mut self.config,
+                &mut self.selected,
+                &mut self.status,
+            ) {
+                Ok(true) => return,
+                Ok(false) => {}
+                Err(e) => {
+                    self.status = format!("{e:#}");
+                    return;
+                }
+            }
         }
         match action {
             Action::Previous => self.selected = self.selected.saturating_sub(1),
@@ -183,15 +227,21 @@ impl App {
             Action::Select(index) if index < self.config.tracks.len() => self.selected = index,
             Action::Arm if self.session.transport() == Transport::Stopped => {
                 self.config.tracks[self.selected].armed ^= true;
-                self.status = "Arm changes last for this run".into();
+                self.status = "Arm changes last for this run; SAVE in SETUP".into();
             }
-            Action::Record => self.status = "Recording not implemented in shell".into(),
+            Action::Record => match self.capture.start(&self.config, &mut self.session) {
+                Ok(()) => {
+                    self.status = self.capture.status.clone();
+                    self.capture_view.page = crate::capture_ui::Page::Inputs;
+                }
+                Err(e) => self.status = format!("{e:#}"),
+            },
             Action::Play if self.session.transport() == Transport::Stopped => {
                 self.playback.active = true;
                 self.playback.dispatch(Action::Refresh);
             }
             Action::Stop => {
-                self.session.stop();
+                self.capture.stop(&mut self.session);
             }
             Action::Exit => {
                 self.session.request_exit();
@@ -281,8 +331,31 @@ impl App {
                 match key.code {
                     KeyCode::Up | KeyCode::Char('k') => Some(Action::Previous),
                     KeyCode::Down | KeyCode::Char('j') => Some(Action::Next),
+                    KeyCode::Enter
+                        if self.capture_view.page == crate::capture_ui::Page::Recovery =>
+                    {
+                        Some(Action::Confirm)
+                    }
+                    KeyCode::Enter
+                        if self.capture_view.page == crate::capture_ui::Page::Source
+                            || self.capture_view.page == crate::capture_ui::Page::Destination =>
+                    {
+                        Some(Action::Apply)
+                    }
+                    KeyCode::Esc if self.capture_view.page != crate::capture_ui::Page::Inputs => {
+                        Some(Action::Cancel)
+                    }
                     KeyCode::Char(' ') | KeyCode::Enter => Some(Action::Arm),
                     KeyCode::Char('r') => Some(Action::Record),
+                    KeyCode::Char('i') => Some(Action::Inputs),
+                    KeyCode::Char('e') => Some(Action::Details),
+                    KeyCode::Char('1'..='8') => {
+                        let KeyCode::Char(c) = key.code else {
+                            unreachable!()
+                        };
+                        let b = self.capture_view.buttons()[c as usize - '1' as usize];
+                        (!b.label.is_empty()).then_some(b.action)
+                    }
                     KeyCode::Char('p') => Some(Action::Play),
                     KeyCode::Char('s') => Some(Action::Stop),
                     KeyCode::Esc | KeyCode::Char('q') => Some(Action::Exit),
@@ -305,11 +378,26 @@ impl App {
                             Action::Cancel
                         });
                 }
+                if mouse.row == 12 {
+                    return Some(Action::Details);
+                }
+                if mouse.row == 0 {
+                    return Some(
+                        if self.capture_view.page == crate::capture_ui::Page::Details {
+                            Action::Details
+                        } else {
+                            Action::Inputs
+                        },
+                    );
+                }
                 if (10..12).contains(&mouse.row) {
                     let index = usize::from((mouse.row - 10) * 4 + mouse.column / 10);
-                    return (!NORMAL[index].label.is_empty()).then_some(NORMAL[index].action);
+                    let b = self.capture_view.buttons()[index];
+                    return (!b.label.is_empty()).then_some(b.action);
                 }
-                if (2..7).contains(&mouse.row) {
+                if self.capture_view.page == crate::capture_ui::Page::Inputs
+                    && (2..7).contains(&mouse.row)
+                {
                     let index = self.first_track() + usize::from(mouse.row - 2);
                     return (index < self.config.tracks.len()).then_some(Action::Select(index));
                 }
@@ -335,6 +423,19 @@ impl App {
             self.playback.draw(frame);
             return;
         }
+        if self.capture_view.page != crate::capture_ui::Page::Inputs
+            && !self.session.exit_confirmation()
+        {
+            self.capture_view.draw(
+                frame,
+                &self.capture,
+                &self.config,
+                self.selected,
+                &self.status,
+                self.session.transport(),
+            );
+            return;
+        }
         let build = if cfg!(debug_assertions) { "DEV" } else { "REL" };
         line(
             frame,
@@ -353,10 +454,7 @@ impl App {
             .enumerate()
         {
             let track = &self.config.tracks[index];
-            let route = match track.resolve(&[]) {
-                Resolution::Unassigned => "UNSET",
-                _ => "MISSING",
-            };
+            let route = crate::capture::resolution(track, &self.capture.sources());
             let text = format!(
                 "{} {} {:2} {}",
                 if index == self.selected { ">" } else { " " },
@@ -388,16 +486,40 @@ impl App {
             ),
             Style::default(),
         );
-        line(
-            frame,
-            8,
-            "Sources and meters await audio engine",
-            Style::default(),
-        );
+        if self.session.transport() == Transport::Recording {
+            line(frame, 7, "", Style::default());
+            let bank = self.selected / 18 * 18;
+            for (index, track) in self.config.tracks.iter().enumerate().skip(bank).take(18) {
+                let armed_index = self.config.tracks[..index]
+                    .iter()
+                    .filter(|t| t.armed)
+                    .count();
+                let peak = if track.armed {
+                    self.capture.peak(armed_index)
+                } else {
+                    0.
+                };
+                let color = if peak >= 0.99 {
+                    Color::Red
+                } else if peak >= 0.5 {
+                    Color::Yellow
+                } else if peak > 0.001 {
+                    Color::Green
+                } else {
+                    Color::DarkGray
+                };
+                frame.render_widget(
+                    Paragraph::new(if track.armed { "●" } else { "○" })
+                        .style(Style::default().fg(color)),
+                    Rect::new(((index - bank) * 2) as u16, 7, 2, 1),
+                );
+            }
+        }
+        line(frame, 8, &self.capture.progress(), Style::default());
         line(
             frame,
             9,
-            "Touch a channel; ARM toggles it",
+            &self.capture.limit(&self.config),
             Style::default(),
         );
         if self.session.exit_confirmation() {
@@ -414,7 +536,7 @@ impl App {
                 );
             }
         } else {
-            for (index, button) in NORMAL.iter().enumerate() {
+            for (index, button) in self.capture_view.buttons().iter().enumerate() {
                 frame.render_widget(
                     Paragraph::new(button.label).style(Style::default().fg(Color::Cyan)),
                     Rect::new((index as u16 % 4) * 10, 10 + index as u16 / 4, 10, 1),

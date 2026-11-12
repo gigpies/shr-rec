@@ -8,6 +8,7 @@ Implementation details, integration, measured evidence and development tasks.
 
 - [Local setup and launcher boundary](reference/LOCAL_SETUP.md)
 - [Raw recording library](RAW_RECORDER.md)
+- [Standalone capture](CAPTURE.md)
 - [Standalone playback](PLAYBACK.md)
 - [Architecture](ARCHITECTURE.md)
 

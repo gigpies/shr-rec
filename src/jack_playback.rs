@@ -167,9 +167,12 @@ impl Client {
         Self::from_api(Api::load()?)
     }
     fn from_api(api: Api) -> Result<Self> {
+        Self::named(api, c"shr-rec-playback")
+    }
+    fn named(api: Api, name: &CStr) -> Result<Self> {
         let mut status = 0;
         // JackNoStartServer | JackUseExactName. Never reconfigure/start JACK.
-        let client = unsafe { (api.open)(c"shr-rec-playback".as_ptr(), 3, &mut status) };
+        let client = unsafe { (api.open)(name.as_ptr(), 3, &mut status) };
         ensure!(
             !client.is_null(),
             "cannot attach to existing JACK server (status {status}); client name must be free"
@@ -181,12 +184,15 @@ impl Client {
         })
     }
     fn outputs(&self) -> Result<Vec<String>> {
+        self.port_names(1)
+    }
+    fn port_names(&self, flags: c_ulong) -> Result<Vec<String>> {
         let list = unsafe {
             (self.api.ports)(
                 self.client,
                 ptr::null(),
                 c"32 bit float mono audio".as_ptr(),
-                1,
+                flags,
             )
         };
         if list.is_null() {
@@ -481,11 +487,11 @@ mod tests {
     use super::*;
     use std::{cell::RefCell, rc::Rc};
     #[derive(Default)]
-    struct Stats {
-        flags: u32,
-        closed: usize,
-        deactivated: usize,
-        connected: usize,
+    pub(super) struct Stats {
+        pub(super) flags: u32,
+        pub(super) closed: usize,
+        pub(super) deactivated: usize,
+        pub(super) connected: usize,
     }
     thread_local! {static SETUP: RefCell<Option<(u8,Rc<RefCell<Stats>>)>>=const{RefCell::new(None)};}
     struct FakePort {
@@ -495,6 +501,7 @@ mod tests {
     }
     struct FakeClient {
         fail: u8,
+        rate_reads: usize,
         stats: Rc<RefCell<Stats>>,
         ports: Vec<*mut FakePort>,
         process: Option<Process>,
@@ -507,6 +514,7 @@ mod tests {
         stats.borrow_mut().flags = flags;
         Box::into_raw(Box::new(FakeClient {
             fail,
+            rate_reads: 0,
             stats,
             ports: vec![],
             process: None,
@@ -538,14 +546,20 @@ mod tests {
         fake.stats.borrow_mut().closed += 1;
         0
     }
-    unsafe extern "C" fn rate(_: *mut c_void) -> c_uint {
-        48000
+    unsafe extern "C" fn rate(client: *mut c_void) -> c_uint {
+        let fake = unsafe { &mut *client.cast::<FakeClient>() };
+        fake.rate_reads += 1;
+        if fake.fail == 8 && fake.rate_reads > 1 {
+            44100
+        } else {
+            48000
+        }
     }
     unsafe extern "C" fn register(
         client: *mut c_void,
         name: *const c_char,
         _: *const c_char,
-        _: c_ulong,
+        flags: c_ulong,
         _: c_ulong,
     ) -> *mut c_void {
         let fake = unsafe { &mut *client.cast::<FakeClient>() };
@@ -554,7 +568,11 @@ mod tests {
         }
         let port = Box::into_raw(Box::new(FakePort {
             name: unsafe { CStr::from_ptr(name) }.to_owned(),
-            samples: [99.; 8192],
+            samples: [if flags == 1 {
+                if fake.ports.is_empty() { 0.25 } else { -0.5 }
+            } else {
+                99.
+            }; 8192],
             connected: false,
         }));
         fake.ports.push(port);
@@ -644,7 +662,7 @@ mod tests {
     unsafe extern "C" fn connect(
         client: *mut c_void,
         source: *const c_char,
-        _: *const c_char,
+        destination: *const c_char,
     ) -> c_int {
         let f = unsafe { &mut *client.cast::<FakeClient>() };
         let mut stats = f.stats.borrow_mut();
@@ -654,7 +672,9 @@ mod tests {
         }
         for port in &f.ports {
             let p = unsafe { &mut **port };
-            if p.name.as_c_str() == unsafe { CStr::from_ptr(source) } {
+            if p.name.as_c_str() == unsafe { CStr::from_ptr(source) }
+                || p.name.as_c_str() == unsafe { CStr::from_ptr(destination) }
+            {
                 p.connected = true;
             }
         }
@@ -683,7 +703,7 @@ mod tests {
     unsafe extern "C" fn connected(port: *const c_void, _: *const c_char) -> c_int {
         i32::from(unsafe { &*port.cast::<FakePort>() }.connected)
     }
-    fn client(fail: u8, stats: Rc<RefCell<Stats>>) -> Client {
+    pub(super) fn client(fail: u8, stats: Rc<RefCell<Stats>>) -> Client {
         SETUP.with(|s| *s.borrow_mut() = Some((fail, stats)));
         Client::from_api(Api {
             handle: ptr::null_mut(),
@@ -851,3 +871,6 @@ mod tests {
         std::fs::remove_dir_all(path).unwrap();
     }
 }
+
+#[path = "jack_capture.rs"]
+pub mod capture;

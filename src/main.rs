@@ -15,7 +15,7 @@ use std::{
     time::Duration,
 };
 
-const HELP: &str = "shr-rec — standalone multichannel take player / recorder shell\n\nUsage: shr-rec [--data-root PATH] [--takes-root PATH] [--open TAKE]\n       shr-rec [--data-root PATH] --init-config\n       shr-rec --help | --version\n\n--data-root PATH  Private configuration (REC_DATA_ROOT also supported)\n--takes-root PATH Read-only take library (default DATA_ROOT/takes)\n--open TAKE       Open one native or SHR format-1 take directory\n--init-config     Create config.json without replacing existing files\n\nRoot: --data-root, REC_DATA_ROOT, XDG_DATA_HOME/rec, HOME/.local/share/rec.\nTouch TAKES, OPEN, OUTPUTS; choose exact or stereo routes, then PLAY.\nKeyboard: arrows, Enter, p/Space, s, q; 1–8 activate visible controls.\nJACK attaches only on explicit output discovery/play; never starts a server.\nRecording and MIDI in the standalone shell remain unimplemented.\n";
+const HELP: &str = "shr-rec — standalone multichannel recorder / take player\n\nUsage: shr-rec [--data-root PATH] [--takes-root PATH] [--open TAKE]\n       shr-rec [--data-root PATH] --init-config\n       shr-rec --help | --version\n\n--data-root PATH  Private configuration (REC_DATA_ROOT also supported)\n--takes-root PATH Take library and default capture destination\n--open TAKE       Open one native or SHR format-1 take directory\n--init-config     Create config.json without replacing existing files\n\nRoot: --data-root, REC_DATA_ROOT, XDG_DATA_HOME/rec, HOME/.local/share/rec.\nTouch TAKES, OPEN, OUTPUTS; choose exact or stereo routes, then PLAY.\nKeyboard: arrows, Enter, p/Space, s, q; 1–8 activate visible controls.\nJACK attaches only on REFRESH, OUTPUTS, RECORD or PLAY; never starts a server.\nSETUP: refresh inputs, assign exact sources and destination, SAVE; ARM, RECORD.\nStandalone MIDI/controller input remains unimplemented.\n";
 
 fn main() -> std::process::ExitCode {
     match run() {
@@ -89,10 +89,24 @@ fn run() -> Result<()> {
         bail!("interactive terminal required; use --help");
     }
     let mut app = App::new(config);
-    app.playback = shr_rec::playback_ui::PlaybackUi::new(
-        root.clone(),
-        library.unwrap_or_else(|| root.join("takes")),
-    );
+    app.capture_view.root = root.clone();
+    app.capture.destination = root.join("takes");
+    if !app.capture.destination.is_absolute() {
+        app.capture.destination = env::current_dir()?.join(&app.capture.destination);
+    }
+    if let Err(e) = app.capture.load(&root, &mut app.config) {
+        app.status = format!("Capture settings: {e:#}");
+    }
+
+    if let Some(path) = library {
+        app.capture.destination = if path.is_absolute() {
+            path
+        } else {
+            env::current_dir()?.join(path)
+        };
+    }
+    app.playback =
+        shr_rec::playback_ui::PlaybackUi::new(root.clone(), app.capture.destination.clone());
     if let Some(path) = open {
         app.playback.active = true;
         app.playback.open(&path)?;
@@ -108,22 +122,37 @@ fn run() -> Result<()> {
     let _guard = TerminalGuard::enter()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
-    while app.session.transport() != Transport::Exited {
-        if shutdown.load(std::sync::atomic::Ordering::Relaxed) {
-            app.shutdown();
-            if app.session.transport() == Transport::Exited {
-                break;
+    let result = (|| -> Result<()> {
+        while app.session.transport() != Transport::Exited {
+            if shutdown.load(std::sync::atomic::Ordering::Relaxed) {
+                app.shutdown();
+                if app.session.transport() == Transport::Exited {
+                    break;
+                }
+            }
+            app.tick();
+            terminal.draw(|frame| app.draw(frame))?;
+            if event::poll(Duration::from_millis(100))?
+                && let Some(action) = app.event(event::read()?, terminal.size()?)
+            {
+                app.dispatch(action);
             }
         }
+        Ok(())
+    })();
+    // Terminal read/draw failures use the same producer barrier and durable
+    // completion as deliberate exit. Keep the writer off the terminal thread.
+    app.shutdown();
+    while app.capture.busy() {
         app.tick();
-        terminal.draw(|frame| app.draw(frame))?;
-        if event::poll(Duration::from_millis(100))?
-            && let Some(action) = app.event(event::read()?, terminal.size()?)
-        {
-            app.dispatch(action);
-        }
+        std::thread::sleep(Duration::from_millis(10));
     }
-    Ok(())
+    drop(terminal);
+    drop(_guard);
+    if let Some(take) = app.session.retained() {
+        eprintln!("shr-rec: {}", take.detail);
+    }
+    result
 }
 
 fn nonempty_env(name: &str) -> Option<OsString> {

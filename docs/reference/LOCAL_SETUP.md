@@ -7,7 +7,7 @@ Detailed reference. For everyday use, start with the [operating guide](../LOCAL_
 Build with `cargo build --locked --release`. The exact toolchain is selected by
 `rust-toolchain.toml`; install it with
 `rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy`
-if absent. The tested platform is AArch64 Linux. Playback loads system
+if absent. The tested platform is AArch64 Linux. Capture and playback load system
 `libjack.so.0` dynamically and needs an existing JACK server when explicitly discovering destinations or starting audio. No JACK
 Rust dependency or JACK/ALSA development package is needed to build.
 
@@ -51,14 +51,17 @@ Configuration format 1 currently contains `format_version` and `tracks`.
 Each track has a unique ASCII `id`, printable `label`, `armed` boolean and
 nullable `preferred_source`. Sources are remembered exact strings: no substring,
 channel-number or first-port fallback. Refresh resolution does not rewrite them.
-The foundation has no port discovery, so remembered sources show MISSING.
-There are at most 64 tracks; 18 is the future Pi acceptance target.
+SETUP → REFRESH discovers current exact sources without changing preferences.
+There are at most 64 tracks; 18 remains the separate sustained Pi acceptance target.
 
-This is an initial **configuration** schema, not the future take manifest.
-Playback output routes/mix live in separate private `playback.json`; the full
-standalone capture schema and controller mappings remain pending. Arm
-changes in the current shell last only for that process; edit the private file
-while stopped to set startup preferences. Do not track real routes or takes.
+The standalone capture adapter keeps explicit SAVE preferences in private
+`capture.json`: version, destination and the same ordered track schema. It does
+not rewrite initial config.json. Playback output routes/mix remain separate in
+`playback.json`; controller mappings remain pending. Ordinary startup is read-only.
+Capture defaults to DATA_ROOT/takes or its remembered destination; an explicit
+`--takes-root` takes precedence for this run. DEST can select an existing directory
+without a keyboard. No real routes or takes belong in tracked files.
+[Capture format and lifecycle](../CAPTURE.md).
 
 ## Direct and launcher invocation
 
@@ -75,15 +78,14 @@ The terminal guard restores raw mode,
 cursor visibility, mouse reporting and alternate screen on normal exit,
 handled errors and unwinding. SIGKILL, power loss and abort cannot run cleanup.
 
-The engine-independent state contract already requires Stop and finalize /
-Cancel during recording, waits for producer/worker completion and keeps a
-damaged result visible before another deliberate Exit. The recording engine is
-not wired to that protocol yet; playback drives common transport and quiescence.
-Before recording is enabled, the signal path must drive its
-quiescence/finalization effects and leave crash-recoverable files; current
-terminal tests establish terminal cleanup, while offline playback tests cover
-reader/callback teardown. See [playback](../PLAYBACK.md) for invocation,
-format compatibility, exact routes and failure behavior.
+Capture EXIT offers Stop and finalize / Cancel, waits for producer/worker
+completion, and keeps a damaged result visible before another deliberate Exit.
+Signals and terminal read/draw errors drive the same producer barrier and writer
+completion; any retained result/path is printed after terminal restoration.
+Finalization runs off the UI thread and can wait for in-flight filesystem I/O.
+The raw C ABI remains host-owned and does not acquire devices. See
+[capture](../CAPTURE.md) and [playback](../PLAYBACK.md) for exact routes,
+format compatibility, failure behavior and offline acceptance limits.
 
 ## Executable naming
 
