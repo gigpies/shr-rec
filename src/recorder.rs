@@ -351,10 +351,26 @@ impl Drop for Recorder {
     }
 }
 
+/// Take files are buffered: one 64 KiB buffer per stem and the timeline turn
+/// ~17,000 tiny writes per second into a few hundred, so recording no longer
+/// stalls unrelated threads around filesystem journal commits. `written`
+/// advances only after a flush, so it still means "handed to the OS".
 struct TakeFiles {
     directory: File,
-    stems: Vec<File>,
-    timeline: File,
+    stems: Vec<std::io::BufWriter<File>>,
+    timeline: std::io::BufWriter<File>,
+}
+const TAKE_BUFFER: usize = 64 * 1024;
+/// Flush after this many blocks (32 ms at 48 frames) or after `FLUSH_IDLE` idle.
+const FLUSH_BLOCKS: u64 = 32;
+const FLUSH_IDLE: Duration = Duration::from_millis(20);
+impl TakeFiles {
+    fn flush(&mut self) -> std::io::Result<()> {
+        for stem in &mut self.stems {
+            stem.flush()?;
+        }
+        self.timeline.flush()
+    }
 }
 
 fn open_directory(path: &Path) -> Result<File> {
@@ -472,10 +488,11 @@ impl TakeFiles {
             let mut file = child(&directory, &stem_name(channel, true), true)?;
             file.write_all(&wav_header(config.sample_rate, 0)?)?;
             file.sync_all()?;
-            stems.push(file);
+            stems.push(std::io::BufWriter::with_capacity(TAKE_BUFFER, file));
         }
         let timeline = child(&directory, "timeline.jsonl", true)?;
         timeline.sync_all()?;
+        let timeline = std::io::BufWriter::with_capacity(TAKE_BUFFER, timeline);
         directory.sync_all()?;
         if let Some(parent) = path.parent() {
             File::open(parent)?.sync_all()?;
@@ -494,9 +511,11 @@ impl TakeFiles {
             }
             file.seek(SeekFrom::Start(0))?;
             file.write_all(&wav_header(config.sample_rate, report.frames)?)?;
-            file.sync_all()?;
+            file.flush()?;
+            file.get_ref().sync_all()?;
         }
-        self.timeline.sync_all()?;
+        self.timeline.flush()?;
+        self.timeline.get_ref().sync_all()?;
         for channel in 0..config.channels {
             publish(
                 &self.directory,
@@ -548,6 +567,8 @@ fn write_take(
     let mut frames = 0u64;
     let mut clipped = 0u64;
     let mut written_blocks = 0u64;
+    let mut unflushed = 0u64;
+    let mut last_flush = std::time::Instant::now();
     let write_result: Result<()> = (|| {
         loop {
             let block = match blocks.pop() {
@@ -560,6 +581,12 @@ fn write_take(
                             break;
                         }
                         continue;
+                    }
+                    if unflushed > 0 && last_flush.elapsed() >= FLUSH_IDLE {
+                        files.flush()?;
+                        shared.written.store(frames, Ordering::Release);
+                        unflushed = 0;
+                        last_flush = std::time::Instant::now();
                     }
                     thread::sleep(Duration::from_micros(250));
                     continue;
@@ -599,9 +626,17 @@ fn write_take(
             )?;
             files.timeline.write_all(b"\n")?;
             frames += u64::from(block.frames);
-            shared.written.store(frames, Ordering::Release);
             written_blocks += 1;
+            unflushed += 1;
+            if unflushed >= FLUSH_BLOCKS || last_flush.elapsed() >= FLUSH_IDLE {
+                files.flush()?;
+                shared.written.store(frames, Ordering::Release);
+                unflushed = 0;
+                last_flush = std::time::Instant::now();
+            }
         }
+        files.flush()?;
+        shared.written.store(frames, Ordering::Release);
         Ok(())
     })();
     let bits = shared.source_bits.load(Ordering::Relaxed);
@@ -1275,7 +1310,8 @@ mod tests {
         let temp = Temp::new();
         let mut files = TakeFiles::create(&temp.path("disk"), &config()).unwrap();
         assert!(check_space(&files.directory, u64::MAX).is_err());
-        files.stems[1] = OpenOptions::new().write(true).open("/dev/full").unwrap();
+        files.stems[1] =
+            std::io::BufWriter::new(OpenOptions::new().write(true).open("/dev/full").unwrap());
         let (mut samples, sample_reader) = RingBuffer::new(2);
         let (mut blocks, block_reader) = RingBuffer::new(2);
         samples.push_entire_slice(&[0.0; 2]).unwrap();
@@ -1322,6 +1358,7 @@ mod tests {
             for code in 0..(7 + index) as i32 {
                 file.write_all(&code.to_le_bytes()[..3]).unwrap();
             }
+            file.flush().unwrap();
         }
         for channel in 0..rename_count {
             publish(
