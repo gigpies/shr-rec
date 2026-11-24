@@ -79,6 +79,9 @@ ordered source mapping remain the host's identities, separate from raw-v1 stems.
 
 Accepted frames entered the bounded queues; written frames reached **all** stems
 and the timeline journal. A partial stem write does not advance written frames.
+Stems and the timeline are written through 64 KiB buffers that flush every 32
+blocks, after 20 ms without new blocks, and at finalization; written frames advance
+only after a successful flush, so written still means handed to the OS (not durable).
 Neither counter proves fsync. Durable frames is always `UINT64_MAX` (unknown),
 including after successful finish; finalization is not power-loss certification.
 Snapshots include dropped frames/overflow blocks, source gaps, invalid blocks,
